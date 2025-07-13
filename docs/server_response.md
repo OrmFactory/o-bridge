@@ -84,6 +84,21 @@ Then:
   - Each: `[RowLength: int32][RowData: bytes]`
 - Final `StreamEnd (0x21)` with zero-length payload.
 
+## Execution Semantics
+
+- Each command in a request block is executed independently.
+- If one command fails, subsequent commands are still executed.
+- It is the client’s responsibility to use transactions if atomicity or command-level dependency is required.
+
+## Cancellation
+
+The client may cancel a long-running request by closing the TCP connection.  
+This is the recommended and supported mechanism for interrupting execution and freeing resources on the server side.
+
+The server must handle connection termination gracefully and release any in-progress transactions or resources associated with the `ConnId`.
+
+Out-of-band cancellation via command is not supported in the base protocol.
+
 ---
 
 ## Summary
