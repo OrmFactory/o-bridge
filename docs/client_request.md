@@ -2,86 +2,140 @@
 
 ## Overview
 
-The o-Connector protocol is a binary protocol designed to bridge Oracle databases with lightweight clients using a minimal, fast, and memory-efficient approach. The protocol is built on top of plain TCP and uses a request-response model with streaming support.
+The **o-Connector** protocol is a lightweight, binary, TCP-based protocol designed for fast and memory-efficient interaction with Oracle databases.
+
+Each **TCP connection represents a single logical Oracle session**. The protocol follows a request-response model with streaming support for query results. All commands are processed sequentially. This document defines the structure and semantics of **client-to-server requests**. Server responses are covered in a separate document.
 
 This document describes the structure of **client-to-server requests**. Server responses are covered in a separate document.
 
-## Connection Lifecycle
+## Session Handshake
 
-- Each TCP connection is considered a logical communication channel.
-- A `ConnId` (GUID) can be assigned by the client or requested from the server.
-- The `ConnId` is used to associate stateful context like transactions or pooled connections.
-- If `ConnId` is not included, the server will require a `Hello` command or assign one implicitly.
-- An empty request acts as a ping.
+Each TCP connection begins with a **fixed-length handshake header**, which defines protocol capabilities, version, and compression support.
 
+### Handshake Header Format
+
+|Field|Size (bytes)|Description|
+|---|---|---|
+|`Magic`|4|ASCII `"OCON"` (0x4F 0x43 0x4F 0x4E)|
+|`Version`|1|Protocol version (currently `0x01`)|
+|`Flags`|1|Bitmask: e.g., `0x01` = compression enabled|
+|`Reserved`|2|Must be zero. Reserved for future extensions|
+Total: **8 bytes**. This header must be sent immediately upon opening the TCP connection.
+
+```
+4F 43 4F 4E   // 'OCON'
+01           // Protocol version 1
+01           // Flags: compression enabled (0x01)
+00 00        // Reserved
+```
 ## Request Frame Structure
 
 All client requests follow a common binary format:
 
 ```
 [CommandCode: byte]
-[PayloadLength: int32]
+[PayloadLength: int32]   // big-endian
 [Payload: bytes]
 ```
 
-The `Payload` format depends on the command.
+- `CommandCode`: identifies the type of command (see command list below).
+- `PayloadLength`: length of the payload in bytes (not including the header).
+- `Payload`: command-specific data.
 
+### Invalid Handshake
+
+If the magic header is invalid or the version is unsupported, the server **must close the connection immediately**.
+## Authentication
+
+After sending the 8-byte handshake, the client **must** send **one authentication command**, depending on the chosen mode.
+
+### Two supported modes:
+
+| Mode            | Command                 | Description                                   |
+| --------------- | ----------------------- | --------------------------------------------- |
+| **Full string** | `ConnectFull` (`0x02`)  | Passes raw connection string to Oracle driver |
+| **Named login** | `ConnectNamed` (`0x03`) | Sends username/password separately            |
+Only one of these commands must be used per session, and it must come **immediately after the handshake**.
+
+## ConnectFull (`0x02`)
+
+### Payload:
+
+```
+[int32: length of connection string]
+[UTF-8 bytes: Oracle connection string]
+```
+
+## ConnectNamed (`0x03`)
+
+### Payload:
+
+```
+[int32: login length]
+[UTF-8 bytes: login]
+[int32: password length]
+[UTF-8 bytes: password]
+```
+Server will use environment or fixed configuration to resolve remaining Oracle connection details.
+
+## Execution Model
+
+- Commands are executed **strictly sequentially**.
+- Only one active command may be in progress at a time.
+- Query commands (`0x20`) initiate a **streaming result**.
+- While a query is in progress, only `CancelFetch` is permitted.
 ## Commands
+| Code (`byte`) | Command               | Payload Details            | Description                                |
+| ------------- | --------------------- | -------------------------- | ------------------------------------------ |
+| `0x10`        | `BeginTransaction`    | _(empty)_                  | Starts an Oracle transaction               |
+| `0x11`        | `CommitTransaction`   | _(empty)_                  | Commits the current transaction            |
+| `0x12`        | `RollbackTransaction` | _(empty)_                  | Rolls back the current transaction         |
+| `0x20`        | `Query`               | `SqlText + ParameterBlock` | Executes a SQL command (SELECT, DML, etc.) |
+| `0x30`        | `CancelFetch`         | _(empty)_                  | Terminates an in-progress query stream     |
+## Query Command (`0x20`)
 
-| Code (`byte`) | Command               | Payload Details                                                            |
-| ------------- | --------------------- | -------------------------------------------------------------------------- |
-| `0x01`        | `Hello`               | `[ConnId: 16 bytes]` Optional initialization.                              |
-| `0x02`        | `ConnectFull`         | `[ConnId: 16 bytes][ConnectionString: length-prefixed UTF8]`               |
-| `0x03`        | `ConnectNamed`        | `[ConnId: 16 bytes][Login: len+UTF8][Password: len+UTF8]`                  |
-| `0x10`        | `BeginTransaction`    | `[ConnId][ClientTxId: int32]`                                              |
-| `0x11`        | `CommitTransaction`   | `[ConnId][TxIdMode: byte][TxId: int32]`                                    |
-| `0x12`        | `RollbackTransaction` | `[ConnId][TxIdMode: byte][TxId: int32]`                                    |
-| `0x20`        | `Query`               | `[ConnId][TxIdMode: byte][TxId: int32][SqlText: len+UTF8][ParameterBlock]` |
-| `0x30`        | `Disconnect`          | `[ConnId]`                                                                 |
+The `Query` command is used for **all SQL execution**, including:
 
-### Reserved
+- `SELECT`
+- `INSERT`, `UPDATE`, `DELETE`
+- DDL statements (`CREATE TABLE`, etc.)
 
-| Code   | Reserved For    |
-| ------ | --------------- |
-| `0x40` | `DescribeTable` |
-| `0x50` | `ServerInfo`    |
-
-## ConnId Handling
-
-- The `ConnId` is always 16 bytes (GUID format).
-- It identifies the logical connection context and associated Oracle session.
-- Clients may reuse the same `ConnId` across multiple TCP connections.
-- Invalid or unknown `ConnId`s may be rejected or delayed by the server.
-
-## Transaction ID Handling
-
-For commands that participate in transactions:
+### Payload Structure:
 
 ```
-[TxIdMode: byte] // 0 = none, 1 = ClientTxId, 2 = ServerTxId
-[TxId: int32]    // if TxIdMode != 0
+[SqlLength: int32]
+[SqlText: UTF-8 bytes]
+[ParameterBlock: bytes] // optional, see parameter encoding spec
 ```
 
-- `ClientTxId` is specified in `BeginTransaction` and reused in chained requests.
-- `ServerTxId` is returned by the server in response and used in standard transactional flows.
+- `SqlText` must be a valid UTF-8 encoded Oracle SQL statement.
+- `ParameterBlock` (if used) encodes parameters in a custom binary format (defined separately).
 
+## CancelFetch Command (`0x30)
+
+If a query is currently streaming rows to the client, the client may issue a `CancelFetch` request to instruct the server to stop sending further rows.
+
+- This command is only valid while a `Query` is in progress.
+- The server will stop sending row data, close the cursor, and send a final message (e.g., `QueryDone` with `canceled = true`).
+
+## Notes on Transaction Handling
+
+- Transactions are session-scoped.
+- If the client closes the connection without committing, Oracle will **automatically roll back**.
+- Transactions do not require client-supplied IDs - only `Begin`, `Commit`, and `Rollback` commands are needed.
 ## Behavior
 
-- Clients may initiate transactions and execute multiple commands in a single request cycle.
-- The `ConnId` must be consistent across related requests.
-- Empty requests (no command code) act as ping and may receive an empty or delayed response.
+- Each TCP socket maps to **one active Oracle session**.
+- Closing the TCP connection cleanly terminates the session and rolls back any open transaction (per Oracle behavior).
+- There is no need for explicit connection identifiers (`ConnId`) or session tokens..
 
-## Out of Scope (for request format)
+## Query Result Behavior (Client-side)
 
-- Response and error format
-- Table metadata and data serialization
-- Compression and transport-level encryption
+The client is expected to infer:
 
-## TODO (covered in separate documents)
-
-- Server response frame and error handling
-- Parameter encoding format
-- Query result (table) format
-- Type system definition
-- Server-side connection and transaction mapping
+| Property          | How it is determined                                  |
+| ----------------- | ----------------------------------------------------- |
+| `HasRows`         | `true` after receiving the first data row             |
+| `RowCount`        | Counted by the client during row streaming            |
+| `RecordsAffected` | Provided by the server in the query response metadata |
 
