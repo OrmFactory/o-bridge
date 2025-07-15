@@ -14,12 +14,12 @@ Each TCP connection begins with a **fixed-length handshake header**, which defin
 
 ### Handshake Header Format
 
-|Field|Size (bytes)|Description|
-|---|---|---|
-|`Magic`|4|ASCII `"OCON"` (0x4F 0x43 0x4F 0x4E)|
-|`Version`|1|Protocol version (currently `0x01`)|
-|`Flags`|1|Bitmask: e.g., `0x01` = compression enabled|
-|`Reserved`|2|Must be zero. Reserved for future extensions|
+| Field      | Size (bytes) | Description                                  |
+| ---------- | ------------ | -------------------------------------------- |
+| `Magic`    | 4            | ASCII `"OCON"` (0x4F 0x43 0x4F 0x4E)         |
+| `Version`  | 1            | Protocol version (currently `0x01`)          |
+| `Flags`    | 1            | Bitmask: e.g., `0x01` = compression enabled  |
+| `Reserved` | 2            | Must be zero. Reserved for future extensions |
 Total: **8 bytes**. This header must be sent immediately upon opening the TCP connection.
 
 ```
