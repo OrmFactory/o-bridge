@@ -1,14 +1,15 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace OBridge.Server;
 
 public class Worker : BackgroundService
 {
-	private const int ListenerPort = 0x0FAC;
-
 	private readonly ILogger<Worker> logger;
+	private Settings settings;
+	private X509Certificate2 certificate;
 
 	public Worker(ILogger<Worker> logger)
 	{
@@ -17,14 +18,61 @@ public class Worker : BackgroundService
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
 	{
-		logger.LogInformation("Starting TCP listener...");
-		var listener = new TcpListener(IPAddress.Any, ListenerPort);
-		listener.Start();
-		while (true)
+		try
 		{
-			var client = await listener.AcceptTcpClientAsync(stoppingToken);
-			Task.Run(() => HandleClientAsync(client, stoppingToken));
+			settings = Settings.LoadSettings(logger);
+			certificate = Certificate.LoadCertificate(settings, logger);
 		}
+		catch (Exception e)
+		{
+			logger.LogError(e, e.Message);
+			return;
+		}
+
+		logger.LogInformation("Starting TCP listeners...");
+		var t1 = Task.Run(() => ListenPlain(settings.PlainListenerPort, stoppingToken), stoppingToken);
+		var t2 = Task.Run(() => ListenTls(settings.SslListenerPort, stoppingToken), stoppingToken);
+		Task.WaitAll(t1, t2);
+
+		logger.LogInformation("Stopping TCP listeners...");
+	}
+
+	private async Task ListenPlain(int port, CancellationToken token)
+	{
+		var listener = new TcpListener(IPAddress.Any, port);
+		listener.Start();
+		logger.LogInformation($"Listening on port {port}");
+
+		while (!token.IsCancellationRequested)
+		{
+			var client = await listener.AcceptTcpClientAsync(token);
+			Task.Run(() => HandlePlainClientAsync(client, token), token);
+		}
+	}
+
+	private async Task ListenTls(int port, CancellationToken token)
+	{
+		var listener = new TcpListener(IPAddress.Any, port);
+		listener.Start();
+		logger.LogInformation($"Listening on port {port} using TLS");
+
+		while (!token.IsCancellationRequested)
+		{
+			var client = await listener.AcceptTcpClientAsync(token);
+			Task.Run(() => HandleSslClientAsync(client, token), token);
+		}
+		listener.Stop();
+		logger.LogInformation($"TLS port {port} closed");
+	}
+
+	private async Task HandlePlainClientAsync(TcpClient client, CancellationToken token)
+	{
+
+	}
+
+	private async Task HandleSslClientAsync(TcpClient client, CancellationToken token)
+	{
+
 	}
 
 	private async Task HandleClientAsync(TcpClient client, CancellationToken token)
