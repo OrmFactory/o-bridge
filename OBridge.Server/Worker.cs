@@ -7,13 +7,13 @@ namespace OBridge.Server;
 
 public class Worker : BackgroundService
 {
-	private readonly ILogger<Worker> logger;
+	private readonly ILogger logger;
 	private Settings settings;
 	private X509Certificate2 certificate;
 
-	public Worker(ILogger<Worker> logger)
+	public Worker(ILoggerFactory loggerFactory)
 	{
-		this.logger = logger;
+		logger = loggerFactory.CreateLogger("");
 	}
 
 	protected override async Task ExecuteAsync(CancellationToken stoppingToken)
