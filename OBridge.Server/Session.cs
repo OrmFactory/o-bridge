@@ -5,11 +5,12 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Oracle.ManagedDataAccess.Client;
 using ZstdSharp;
 
 namespace OBridge.Server;
 
-public class Session : IDisposable
+public class Session : IDisposable, IAsyncDisposable
 {
 	private readonly Stream stream;
 	private readonly Settings settings;
@@ -19,6 +20,7 @@ public class Session : IDisposable
 	private BinaryWriter writer;
 	private CompressionStream? zstdStream;
 	private ConnectionCredentials credentials;
+	private OracleConnection connection;
 
 	public Session(Stream stream, Settings settings, CancellationToken token)
 	{
@@ -32,6 +34,12 @@ public class Session : IDisposable
 		reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
 
 		ReadHeader();
+		if (!settings.EnableCompression) enableCompression = false;
+
+		credentials = ReadCredentials();
+		await TryConnect();
+
+		ReportConnectionSuccess();
 
 		if (enableCompression)
 		{
@@ -43,16 +51,45 @@ public class Session : IDisposable
 			writer = new BinaryWriter(stream, Encoding.UTF8);
 		}
 
-		credentials = ReadCredentials();
-
-		if (credentials.ConnectionString == "")
-		{
-			ReportError(ErrorCode.ConnectionModeDisabled, "Internal mode not implemented");
-		}
-
 		while (!token.IsCancellationRequested)
 		{
+			stream.ReadAsync()
 		}
+	}
+
+	private async Task TryConnect()
+	{
+		if (credentials.ConnectionString == "")
+		{
+			ReportError(ErrorCode.ConnectionModeDisabled, "Internal mode is not implemented");
+			throw new Exception("Internal mode is not implemented");
+		}
+
+		if (credentials.ConnectionString != "" && !settings.EnableFullProxy)
+		{
+			ReportError(ErrorCode.ConnectionModeDisabled, "Full proxy mode is disabled");
+			throw new Exception("Full proxy mode is disabled");
+		}
+
+		try
+		{
+			connection = new OracleConnection(credentials.ConnectionString);
+			await connection.OpenAsync(token);
+		}
+		catch (Exception e)
+		{
+			ReportError(ErrorCode.ConnectionFailed, e.Message);
+			throw e;
+		}
+
+	}
+
+	private void ReportConnectionSuccess()
+	{
+		writer.Write((byte)0x00);
+		byte compressionFlag = 0;
+		if (enableCompression) compressionFlag = 1;
+		writer.Write(compressionFlag);
 	}
 
 	private void ReportError(ErrorCode errorCode, string message)
@@ -61,7 +98,6 @@ public class Session : IDisposable
 		writer.Write((byte)errorCode);
 		writer.Write(message);
 		writer.Flush();
-		throw new Exception(message);
 	}
 
 	private ConnectionCredentials ReadCredentials()
@@ -98,9 +134,18 @@ public class Session : IDisposable
 
 	public void Dispose()
 	{
-		reader?.Close();
-		writer?.Close();
-		zstdStream?.Close();
+		connection?.Dispose();
+		reader?.Dispose();
+		writer?.Dispose();
+		zstdStream?.Dispose();
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		if (connection != null) await connection.DisposeAsync();
+		if (reader != null) reader.Dispose();
+		if (writer != null) await writer.DisposeAsync();
+		if (zstdStream != null) await zstdStream.DisposeAsync();
 	}
 }
 
@@ -129,5 +174,6 @@ public class ConnectionCredentials
 
 public enum ErrorCode
 {
-	ConnectionModeDisabled
+	ConnectionModeDisabled,
+	ConnectionFailed
 }

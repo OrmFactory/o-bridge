@@ -29,14 +29,15 @@ All sizes refer to the **uncompressed** payload. Responses are delivered in the 
 
 ## Response Codes
 
-| Code (`byte`) | Name                  | Description                                                   |
-| ------------- | --------------------- | ------------------------------------------------------------- |
-| `0x00`        | `Success`             | Acknowledges a successful command with no additional data     |
-| `0x01`        | `SuccessWithData`     | Begins a stream of tabular data (`StreamRow` and `StreamEnd`) |
-| `0x03`        | `TransactionAccepted` | (Optional) Acknowledges `BeginTransaction` with ServerTxId    |
-| `0x10`        | `Error`               | Command failed; includes error code and message               |
-| `0x20`        | `StreamRow`           | Single row of tabular data in a query stream                  |
-| `0x21`        | `StreamEnd`           | Terminates a streamed response                                |
+| Code (`byte`) | Name                  | Description                                                                     |
+| ------------- | --------------------- | ------------------------------------------------------------------------------- |
+| `0x00`        | ConnectionSuccess     | Followed by byte: 0x00 - compression is disabled, 0x01 - compression is enabled |
+| `0x01`        | `Success`             | Acknowledges a successful command with no additional data                       |
+| `0x02`        | `SuccessWithData`     | Begins a stream of tabular data (`StreamRow` and `StreamEnd`)                   |
+| `0x03`        | `TransactionAccepted` | (Optional) Acknowledges `BeginTransaction` with ServerTxId                      |
+| `0x10`        | `Error`               | Command failed; includes error code and message                                 |
+| `0x20`        | `StreamRow`           | Single row of tabular data in a query stream                                    |
+| `0x21`        | `StreamEnd`           | Terminates a streamed response                                                  |
 ## Command Response Semantics
 
 ### Connect Commands
