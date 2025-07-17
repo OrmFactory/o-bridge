@@ -9,6 +9,7 @@ namespace OBridge.Server;
 public class Settings
 {
 	public bool EnableFullProxy = true;
+	public bool EnableCompression = true;
 	public int PlainListenerPort = 0x0F0F;
 	public int SslListenerPort = 0x0FAC;
 	public string? CertificatePath = null;

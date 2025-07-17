@@ -62,7 +62,7 @@ Only one of these commands must be used per session, and it must come **immediat
 ### Payload:
 
 ```
-[int32: length of connection string]
+[7BitEncodedInt: length of connection string]
 [UTF-8 bytes: Oracle connection string]
 ```
 
@@ -71,9 +71,11 @@ Only one of these commands must be used per session, and it must come **immediat
 ### Payload:
 
 ```
-[int32: login length]
+[7BitEncodedInt: server name length]
+[UTF-8 bytes: server name]
+[7BitEncodedInt: login length]
 [UTF-8 bytes: login]
-[int32: password length]
+[7BitEncodedInt: password length]
 [UTF-8 bytes: password]
 ```
 Server will use environment or fixed configuration to resolve remaining Oracle connection details.
