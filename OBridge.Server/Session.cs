@@ -16,7 +16,7 @@ public class Session : IDisposable, IAsyncDisposable
 	private readonly Settings settings;
 	private readonly CancellationToken token;
 	private bool enableCompression = false;
-	private BinaryReader reader;
+	private AsyncBinaryReader reader;
 	private BinaryWriter writer;
 	private CompressionStream? zstdStream;
 	private ConnectionCredentials credentials;
@@ -31,12 +31,12 @@ public class Session : IDisposable, IAsyncDisposable
 
 	public async Task Process()
 	{
-		reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+		reader = new AsyncBinaryReader(stream, token);
 
 		ReadHeader();
 		if (!settings.EnableCompression) enableCompression = false;
 
-		credentials = ReadCredentials();
+		credentials = await ReadCredentials();
 		await TryConnect();
 
 		ReportConnectionSuccess();
@@ -53,7 +53,6 @@ public class Session : IDisposable, IAsyncDisposable
 
 		while (!token.IsCancellationRequested)
 		{
-			stream.ReadAsync()
 		}
 	}
 
@@ -100,29 +99,31 @@ public class Session : IDisposable, IAsyncDisposable
 		writer.Flush();
 	}
 
-	private ConnectionCredentials ReadCredentials()
+	private async Task<ConnectionCredentials> ReadCredentials()
 	{
-		var credType = reader.ReadByte();
+		var credType = await reader.ReadByteAsync();
 		if (credType == 2)
 		{
-			var srv = reader.ReadString();
-			var login = reader.ReadString();
-			var password = reader.ReadString();
+			reader.MaxStringBytes = 1024;
+			var srv = await reader.ReadStringAsync();
+			var login = await reader.ReadStringAsync();
+			var password = await reader.ReadStringAsync();
 			return new ConnectionCredentials(srv, login, password);
 		}
 
 		if (credType == 3)
 		{
-			var connectionString = reader.ReadString();
+			reader.MaxStringBytes = 4096;
+			var connectionString = await reader.ReadStringAsync();
 			return new ConnectionCredentials(connectionString);
 		}
 
 		throw new Exception("wrong connection credentials type " + credType);
 	}
 
-	private void ReadHeader()
+	private async Task ReadHeader()
 	{
-		var header = reader.ReadBytes(8);
+		var header = await reader.ReadBytesAsync(8);
 		var wrongHeaderEx = new Exception("Wrong header");
 		if (header[0] != 0x4F) throw wrongHeaderEx;
 		if (header[1] != 0x43) throw wrongHeaderEx;
@@ -135,7 +136,6 @@ public class Session : IDisposable, IAsyncDisposable
 	public void Dispose()
 	{
 		connection?.Dispose();
-		reader?.Dispose();
 		writer?.Dispose();
 		zstdStream?.Dispose();
 	}
@@ -143,7 +143,6 @@ public class Session : IDisposable, IAsyncDisposable
 	public async ValueTask DisposeAsync()
 	{
 		if (connection != null) await connection.DisposeAsync();
-		if (reader != null) reader.Dispose();
 		if (writer != null) await writer.DisposeAsync();
 		if (zstdStream != null) await zstdStream.DisposeAsync();
 	}
