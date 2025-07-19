@@ -13,19 +13,19 @@ namespace OBridge.Server;
 public class Session : IAsyncDisposable
 {
 	private const int ProtocolVersion = 1;
-	private readonly Stream stream;
+	
 	private readonly Settings settings;
 	private readonly ILogger logger;
 	private readonly CancellationTokenSource sessionCts;
 	private readonly CancellationToken token;
 	private bool enableCompression = false;
 	private AsyncBinaryReader reader;
-	private AsyncBinaryWriter writer;
 	private CompressionStream? zstdStream;
 	private ConnectionCredentials credentials;
 	private OracleConnection connection;
 	private Query? currentQuery;
 
+	private Stream stream;
 
 	public Session(Stream stream, Settings settings, CancellationToken token, ILogger logger)
 	{
@@ -50,12 +50,7 @@ public class Session : IAsyncDisposable
 
 		if (enableCompression)
 		{
-			zstdStream = new CompressionStream(stream);
-			writer = new AsyncBinaryWriter(zstdStream, token);
-		}
-		else
-		{
-			writer = new AsyncBinaryWriter(stream, token);
+			stream = new CompressionStream(stream);
 		}
 
 		while (!token.IsCancellationRequested)
@@ -72,7 +67,7 @@ public class Session : IAsyncDisposable
 				var query = currentQuery;
 				if (query != null) await query.Finish();
 
-				currentQuery = new Query(connection, writer, token);
+				currentQuery = new Query(connection, stream, token);
 				await currentQuery.ReadQuery(reader);
 				var task = currentQuery.Execute();
 				_ = ExecuteQueryTask(task);
@@ -88,7 +83,7 @@ public class Session : IAsyncDisposable
 		}
 		catch (OperationCanceledException)
 		{
-			await ReportError(ErrorCode.QueryCancelledByClient, "Cancelled by client");
+			await ReportError(ErrorCodeEnum.QueryCancelledByClient, "Cancelled by client");
 		}
 		catch (Exception e)
 		{
@@ -101,13 +96,13 @@ public class Session : IAsyncDisposable
 	{
 		if (credentials.ConnectionString == "")
 		{
-			await ReportError(ErrorCode.ConnectionModeDisabled, "Internal mode is not implemented");
+			await ReportError(ErrorCodeEnum.ConnectionModeDisabled, "Internal mode is not implemented");
 			throw new NotImplementedException("Internal mode is not implemented");
 		}
 
 		if (credentials.ConnectionString != "" && !settings.EnableFullProxy)
 		{
-			await ReportError(ErrorCode.ConnectionModeDisabled, "Full proxy mode is disabled");
+			await ReportError(ErrorCodeEnum.ConnectionModeDisabled, "Full proxy mode is disabled");
 			throw new Exception("Full proxy mode is disabled");
 		}
 
@@ -118,28 +113,27 @@ public class Session : IAsyncDisposable
 		}
 		catch (Exception e)
 		{
-			await ReportError(ErrorCode.ConnectionFailed, e.Message);
+			await ReportError(ErrorCodeEnum.ConnectionFailed, e.Message);
 			throw e;
 		}
-
 	}
 
 	private async Task ReportConnectionSuccess()
 	{
-		await writer.WriteByteAsync(0x00);
+		var response = new Response(0x00);
 		byte compressionFlag = 0;
 		if (enableCompression) compressionFlag = 1;
-		await writer.WriteByteAsync(compressionFlag);
-		await writer.WriteByteAsync(ProtocolVersion);
-		await writer.FlushAsync();
+		response.WriteByte(compressionFlag);
+		response.WriteByte(ProtocolVersion);
+		await response.SendAsync(stream, token);
 	}
 
-	private async Task ReportError(ErrorCode errorCode, string message)
+	private async Task ReportError(ErrorCodeEnum errorCode, string message)
 	{
-		await writer.WriteByteAsync(0x10);
-		await writer.WriteByteAsync((byte)errorCode);
-		await writer.WriteStringAsync(message);
-		await writer.FlushAsync();
+		var response = new Response(ResponseTypeEnum.Error);
+		response.WriteByte((byte)errorCode);
+		response.WriteString(message);
+		await response.SendAsync(stream, token);
 	}
 
 	private async Task<ConnectionCredentials> ReadCredentials()
@@ -181,7 +175,6 @@ public class Session : IAsyncDisposable
 		sessionCts.Dispose();
 		if (currentQuery != null) await currentQuery.Stop();
 		if (connection != null) await connection.DisposeAsync();
-		if (writer != null) await writer.DisposeAsync();
 		if (zstdStream != null) await zstdStream.DisposeAsync();
 	}
 }
@@ -209,9 +202,10 @@ public class ConnectionCredentials
 	}
 }
 
-public enum ErrorCode
+public enum ErrorCodeEnum
 {
 	ConnectionModeDisabled,
 	ConnectionFailed,
-	QueryCancelledByClient
+	QueryCancelledByClient,
+	QueryExecutionFailed
 }

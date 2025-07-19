@@ -10,17 +10,17 @@ namespace OBridge.Server;
 public class Query
 {
 	private readonly OracleConnection connection;
-	private readonly AsyncBinaryWriter writter;
+	private readonly Stream stream;
 	private readonly CancellationToken token;
 	private string query;
 
 	private CancellationTokenSource? queryCts;
 	private Task? queryTask;
 
-	public Query(OracleConnection connection, AsyncBinaryWriter writter, CancellationToken token)
+	public Query(OracleConnection connection, Stream stream, CancellationToken token)
 	{
 		this.connection = connection;
-		this.writter = writter;
+		this.stream = stream;
 		this.token = token;
 	}
 
@@ -52,14 +52,25 @@ public class Query
 	{
 		try
 		{
+			using var cmd = connection.CreateCommand();
+			cmd.CommandText = query;
+			cmd.CommandType = System.Data.CommandType.Text;
+
+			using var reader = await cmd.ExecuteReaderAsync(stopQueryToken);
+			int fieldCount = reader.FieldCount;
+
+			for (int i = 0; i < fieldCount; i++)
+			{
+				//writter.WriteString(reader.GetName(i));
+			}
+
 
 		}
-		catch (OperationCanceledException e)
+		catch (OracleException ex)
 		{
-			await writter.WriteByteAsync(0x10);
-			await writter.WriteByteAsync((byte)ErrorCode.QueryCancelledByClient);
-			await writter.WriteStringAsync(e.Message);
-			await writter.FlushAsync();
+			var error = new Response(ResponseTypeEnum.OracleQueryError);
+			error.WriteString(ex.Message);
+			await error.SendAsync(stream, token);
 		}
 		finally
 		{
