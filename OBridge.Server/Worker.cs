@@ -82,7 +82,7 @@ public class Worker : BackgroundService
 
 		try
 		{
-			await using var session = new Session(networkStream, settings, token);
+			await using var session = new Session(networkStream, settings, token, logger);
 			await session.Process();
 		}
 		catch (Exception e)
@@ -106,7 +106,7 @@ public class Worker : BackgroundService
 		try
 		{
 			await ssl.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
-			await using var session = new Session(ssl, settings, token);
+			await using var session = new Session(ssl, settings, token, logger);
 			await session.Process();
 		}
 		catch (Exception e)

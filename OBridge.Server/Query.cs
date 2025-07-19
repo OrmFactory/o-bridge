@@ -10,14 +10,14 @@ namespace OBridge.Server;
 public class Query
 {
 	private readonly OracleConnection connection;
-	private readonly BinaryWriter writter;
+	private readonly AsyncBinaryWriter writter;
 	private readonly CancellationToken token;
 	private string query;
 
 	private CancellationTokenSource? queryCts;
 	private Task? queryTask;
 
-	public Query(OracleConnection connection, BinaryWriter writter, CancellationToken token)
+	public Query(OracleConnection connection, AsyncBinaryWriter writter, CancellationToken token)
 	{
 		this.connection = connection;
 		this.writter = writter;
@@ -56,10 +56,10 @@ public class Query
 		}
 		catch (OperationCanceledException e)
 		{
-			writter.Write((byte)0x10);
-			writter.Write((byte)ErrorCode.QueryCancelledByClient);
-			writter.Write(e.Message);
-			writter.Flush();
+			await writter.WriteByteAsync(0x10);
+			await writter.WriteByteAsync((byte)ErrorCode.QueryCancelledByClient);
+			await writter.WriteStringAsync(e.Message);
+			await writter.FlushAsync();
 		}
 		finally
 		{
