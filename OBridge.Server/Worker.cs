@@ -92,7 +92,6 @@ public class Worker : BackgroundService
 		finally
 		{
 			logger.LogDebug($"Client {remote} disconnected");
-			client.Close();
 		}
 	}
 
@@ -117,7 +116,6 @@ public class Worker : BackgroundService
 		finally
 		{
 			logger.LogDebug($"Client {remote} disconnected");
-			client.Close();
 		}
 	}
 }

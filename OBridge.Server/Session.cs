@@ -12,8 +12,10 @@ namespace OBridge.Server;
 
 public class Session : IDisposable, IAsyncDisposable
 {
+	private const int ProtocolVersion = 1;
 	private readonly Stream stream;
 	private readonly Settings settings;
+	private readonly CancellationTokenSource sessionCts;
 	private readonly CancellationToken token;
 	private bool enableCompression = false;
 	private AsyncBinaryReader reader;
@@ -21,19 +23,22 @@ public class Session : IDisposable, IAsyncDisposable
 	private CompressionStream? zstdStream;
 	private ConnectionCredentials credentials;
 	private OracleConnection connection;
+	private Query? currentQuery;
+
 
 	public Session(Stream stream, Settings settings, CancellationToken token)
 	{
+		sessionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
 		this.stream = stream;
 		this.settings = settings;
-		this.token = token;
+		this.token = sessionCts.Token;
 	}
 
 	public async Task Process()
 	{
 		reader = new AsyncBinaryReader(stream, token);
 
-		ReadHeader();
+		await ReadHeader();
 		if (!settings.EnableCompression) enableCompression = false;
 
 		credentials = await ReadCredentials();
@@ -53,6 +58,31 @@ public class Session : IDisposable, IAsyncDisposable
 
 		while (!token.IsCancellationRequested)
 		{
+			var command = await reader.ReadByteAsync();
+			if (command == 0x30)
+			{
+				if (currentQuery != null) await currentQuery.Stop();
+			}
+
+			if (command == 0x20)
+			{
+				if (currentQuery != null) await currentQuery.Finish();
+
+				currentQuery = new Query(connection, writer, token);
+				await currentQuery.ReadQuery(reader);
+				var task = currentQuery.Execute();
+				task.ContinueWith(t =>
+				{
+					if (t.IsCanceled)
+					{
+						ReportError(ErrorCode.QueryCancelledByClient, "Cancelled by client");
+					}
+					if (t.IsFaulted)
+					{
+						sessionCts.Cancel();
+					}
+				}, TaskScheduler.Default);
+			}
 		}
 	}
 
@@ -61,7 +91,7 @@ public class Session : IDisposable, IAsyncDisposable
 		if (credentials.ConnectionString == "")
 		{
 			ReportError(ErrorCode.ConnectionModeDisabled, "Internal mode is not implemented");
-			throw new Exception("Internal mode is not implemented");
+			throw new NotImplementedException("Internal mode is not implemented");
 		}
 
 		if (credentials.ConnectionString != "" && !settings.EnableFullProxy)
@@ -89,6 +119,8 @@ public class Session : IDisposable, IAsyncDisposable
 		byte compressionFlag = 0;
 		if (enableCompression) compressionFlag = 1;
 		writer.Write(compressionFlag);
+		writer.Write((byte)ProtocolVersion);
+		writer.Flush();
 	}
 
 	private void ReportError(ErrorCode errorCode, string message)
@@ -135,6 +167,7 @@ public class Session : IDisposable, IAsyncDisposable
 
 	public void Dispose()
 	{
+		//stop query
 		connection?.Dispose();
 		writer?.Dispose();
 		zstdStream?.Dispose();
@@ -142,6 +175,7 @@ public class Session : IDisposable, IAsyncDisposable
 
 	public async ValueTask DisposeAsync()
 	{
+		if (currentQuery != null) await currentQuery.Stop();
 		if (connection != null) await connection.DisposeAsync();
 		if (writer != null) await writer.DisposeAsync();
 		if (zstdStream != null) await zstdStream.DisposeAsync();
@@ -174,5 +208,6 @@ public class ConnectionCredentials
 public enum ErrorCode
 {
 	ConnectionModeDisabled,
-	ConnectionFailed
+	ConnectionFailed,
+	QueryCancelledByClient
 }
