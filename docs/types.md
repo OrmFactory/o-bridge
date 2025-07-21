@@ -6,17 +6,6 @@ This document describes **binary serialization rules** for all supported value t
 - **Type and nullability** are always known (defined in headers).  
 - Null values are not serialized — tracked via separate bitmaps.
 - All values are written in **binary, unambiguous format**, optimized for streaming.
-## Fixed-size Types
-
-| Type       | Code | Size     | Format Description                           |
-| ---------- | ---- | -------- | -------------------------------------------- |
-| `Boolean`  | 0x01 | 1 byte   | `0x00` = false, `0x01` = true                |
-| `Int32`    | 0x02 | 4 bytes  | Little-endian signed 32-bit integer          |
-| `Int64`    | 0x03 | 8 bytes  | Little-endian signed 64-bit integer          |
-| `Float32`  | 0x04 | 4 bytes  | IEEE 754 binary32                            |
-| `Float64`  | 0x05 | 8 bytes  | IEEE 754 binary64                            |
-| `DateTime` | 0x06 | 8 bytes  | .NET `Ticks` (Int64, 100ns since 0001-01-01) |
-| `Guid`     | 0x07 | 16 bytes | Raw 128-bit GUID (standard layout)           |
 ## Variable-size Types
 
 ### `String` (0x10)
@@ -36,7 +25,7 @@ This document describes **binary serialization rules** for all supported value t
 
 - Used for Oracle `RAW`, `BLOB`, etc.
 - Uncompressed, raw byte stream.
-## Decimal / Oracle NUMBER (0x20)
+## NUMBER (0x20)
 
 Binary serialization based on Oracle's flexible precision decimal format.
 ### Format A: Single-byte form (unsigned integer 0–127)
@@ -68,16 +57,18 @@ Meta byte: highest bit `1`, remaining 7 bits = integer value.
 
 ## Summary Table
 
-| Type Name | Code | Size | Description                       |
-| --------- | ---- | ---- | --------------------------------- |
-| Boolean   | 0x01 | 1    | `0x00` or `0x01`                  |
-| Int32     | 0x02 | 4    | little-endian                     |
-| Int64     | 0x03 | 8    | little-endian                     |
-| Float32   | 0x04 | 4    | IEEE 754                          |
-| Float64   | 0x05 | 8    | IEEE 754                          |
-| DateTime  | 0x06 | 8    | ticks (Int64)                     |
-| Guid      | 0x07 | 16   | raw GUID                          |
-| String    | 0x10 | var  | [int32][UTF-8]                    |
-| Binary    | 0x11 | var  | [int32][raw bytes]                |
-| Decimal   | 0x20 | var  | packed BCD or unsigned short form |
-|           |      |      |                                   |
+| Type Name           | Code | Size | Description                       |
+| ------------------- | ---- | ---- | --------------------------------- |
+| Boolean             | 0x01 | 1    | `0x00` or `0x01`                  |
+| Int32               | 0x02 | 4    | little-endian                     |
+| Int64               | 0x03 | 8    | little-endian                     |
+| Float32             | 0x04 | 4    | IEEE 754                          |
+| Float64             | 0x05 | 8    | IEEE 754                          |
+| DateTime            | 0x06 | 8    | ticks (Int64)                     |
+| IntervalDayToSecond | 0x07 | var  |                                   |
+| IntervalYearToMonth | 0x08 | var  |                                   |
+| Guid                | 0x09 | 16   | raw GUID                          |
+| String              | 0x10 | var  | [int32][UTF-8]                    |
+| Binary              | 0x11 | var  | [int32][raw bytes]                |
+| Number              | 0x20 | var  | packed BCD or unsigned short form |
+|                     |      |      |                                   |

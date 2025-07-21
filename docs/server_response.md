@@ -89,15 +89,26 @@ If `SuccessWithData (0x01)` is returned:
 ### Stream Header (included in `Payload` of 0x01):
 
 ```
-[FlagsLength: byte]        // optional per-row flags (e.g. null mask)
-[ColumnCount: int16]
+[ColumnCount: 7BitEncodedInt]
 Repeat ColumnCount times:
-    [ColumnName: len+UTF8]
+	[FieldPresenceMask: byte]
+    [ColumnName: 7BitEncodedInt len + UTF8]
     [TypeCode: byte]
-    [Precision: byte]
-    [Scale: byte]
-    [Nullable: byte]
+    [Optional fields based on nullFlags...]
 ```
+
+This table defines which metadata fields may be null and maps each to a bit position in the `FieldPresenceMask byte (sent per column). If a bit is set to `1`, the corresponding value is present and serialized. If `0`, the field is omitted and should be treated as `null`.
+
+| Bit | Property         | Notes                                                   | Structure                 |
+| --- | ---------------- | ------------------------------------------------------- | ------------------------- |
+| 0   | AllowDBNull      | Nullable for expressions or constants                   | byte                      |
+| 1   | ColumnSize       | Present for variable-length types (e.g., VARCHAR2)      | 7BitEncodedInt            |
+| 2   | NumericPrecision | Present for `NUMBER`, `FLOAT`, etc.                     | byte                      |
+| 3   | NumericScale     | Present for `NUMBER`, `FLOAT`, etc.                     | sbyte                     |
+| 4   | IsAliased        | True if column is aliased (`AS`)                        | byte                      |
+| 5   | IsExpression     | True if column is an expression (`SELECT 2+2`)          | byte                      |
+| 6   | BaseColumnName   | Usually null unless selected directly from a table      | 7BitEncodedInt len + UTF8 |
+| 7   | BaseTableName    | Usually null unless directly selected from a real table | 7BitEncodedInt len + UTF8 |
 
 Then the server emits:
 

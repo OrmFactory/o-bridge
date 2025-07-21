@@ -126,6 +126,7 @@ public class Session : IAsyncDisposable
 		response.WriteByte(compressionFlag);
 		response.WriteByte(ProtocolVersion);
 		await response.SendAsync(stream, token);
+		await stream.FlushAsync(token);
 	}
 
 	private async Task ReportError(ErrorCodeEnum errorCode, string message)
@@ -134,6 +135,7 @@ public class Session : IAsyncDisposable
 		response.WriteByte((byte)errorCode);
 		response.WriteString(message);
 		await response.SendAsync(stream, token);
+		await stream.FlushAsync(token);
 	}
 
 	private async Task<ConnectionCredentials> ReadCredentials()

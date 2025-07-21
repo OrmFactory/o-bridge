@@ -1,9 +1,12 @@
-﻿using System;
+﻿using OBridge.Server.ValueObjects;
+using Oracle.ManagedDataAccess.Client;
+using Oracle.ManagedDataAccess.Types;
+using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Oracle.ManagedDataAccess.Client;
 
 namespace OBridge.Server;
 
@@ -52,18 +55,54 @@ public class Query
 	{
 		try
 		{
-			using var cmd = connection.CreateCommand();
+			await using var cmd = connection.CreateCommand();
 			cmd.CommandText = query;
 			cmd.CommandType = System.Data.CommandType.Text;
 
-			using var reader = await cmd.ExecuteReaderAsync(stopQueryToken);
-			int fieldCount = reader.FieldCount;
+			await using var reader = await cmd.ExecuteReaderAsync(stopQueryToken);
+			var schema = await reader.GetColumnSchemaAsync(stopQueryToken);
+			var columnCount = schema.Count;
+			var columnsHeader = new Response(ResponseTypeEnum.TableHeader);
+			columnsHeader.Write7BitEncodedInt(columnCount);
 
-			for (int i = 0; i < fieldCount; i++)
+			var columns = new List<Column>();
+			for (int i = 0; i < columnCount; i++)
 			{
-				//writter.WriteString(reader.GetName(i));
+				var column = new Column(schema[i]);
+				column.WriteHeader(columnsHeader);
+				columns.Add(column);
 			}
+			await columnsHeader.SendAsync(stream, stopQueryToken);
 
+			var nullableColumns = columns.Where(c => c.IsNullable).ToList();
+
+			while (await reader.ReadAsync(stopQueryToken))
+			{
+				var row = new Response(ResponseTypeEnum.RowData);
+				byte bitMask = 1;
+				byte presenceMaskByte = 0;
+				foreach (var nullableColumn in nullableColumns)
+				{
+					if (!reader.IsDBNull(nullableColumn.Ordinal)) presenceMaskByte |= bitMask;
+					if (bitMask == 128)
+					{
+						bitMask = 1;
+						row.WriteByte(presenceMaskByte);
+						presenceMaskByte = 0;
+					}
+					else bitMask *= 2;
+				}
+				if (bitMask != 1) row.WriteByte(presenceMaskByte);
+				foreach (var column in columns)
+				{
+					if (!reader.IsDBNull(column.Ordinal))
+					{
+						var val = column.GetValueObject();
+						val.LoadFromReader(reader, column.Ordinal);
+						val.Serialize(row);
+					}
+				}
+			}
 
 		}
 		catch (OracleException ex)
@@ -71,6 +110,7 @@ public class Query
 			var error = new Response(ResponseTypeEnum.OracleQueryError);
 			error.WriteString(ex.Message);
 			await error.SendAsync(stream, token);
+			await stream.FlushAsync(token);
 		}
 		finally
 		{
@@ -79,4 +119,116 @@ public class Query
 			queryTask = null;
 		}
 	}
+}
+
+public class Column
+{
+	private readonly DbColumn column;
+	private readonly int ordinal;
+	private readonly byte fieldPresenceMask = 0;
+	private readonly TypeCodeEnum fieldTypeCode;
+
+	public int Ordinal => ordinal;
+
+	public bool IsNullable => column.AllowDBNull ?? true;
+
+	public bool IsFieldPresent(int bit)
+	{
+		return (fieldPresenceMask & (1 << bit)) != 0;
+	}
+
+	public Column(DbColumn column)
+	{
+		this.column = column;
+		this.ordinal = column.ColumnOrdinal ?? throw new Exception();
+		fieldPresenceMask = GetFieldPresenceMask();
+		fieldTypeCode = GetTypeCode();
+	}
+
+	public void WriteHeader(Response response)
+	{
+		response.WriteByte(fieldPresenceMask);
+		response.WriteString(column.ColumnName ?? "");
+		response.WriteByte((byte)fieldTypeCode);
+
+
+		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
+		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);
+		if (IsFieldPresent(2)) response.WriteByte((byte)column.NumericPrecision!.Value);
+		if (IsFieldPresent(3)) response.WriteByte((sbyte)column.NumericScale!.Value);
+		if (IsFieldPresent(4)) response.WriteByte(column.IsAliased!.Value ? (byte)1 : (byte)0);
+		if (IsFieldPresent(5)) response.WriteByte(column.IsExpression!.Value ? (byte)1 : (byte)0);
+		if (IsFieldPresent(6)) response.WriteString(column.BaseColumnName ?? "");
+		if (IsFieldPresent(7)) response.WriteString(column.BaseTableName ?? "");
+	}
+
+	private byte GetFieldPresenceMask()
+	{
+		byte nullFlags = 0;
+
+		if (column.AllowDBNull.HasValue) nullFlags |= 1 << 0;
+		if (column.ColumnSize.HasValue) nullFlags |= 1 << 1;
+		if (column.NumericPrecision.HasValue) nullFlags |= 1 << 2;
+		if (column.NumericScale.HasValue) nullFlags |= 1 << 3;
+		if (column.IsAliased.HasValue) nullFlags |= 1 << 4;
+		if (column.IsExpression.HasValue) nullFlags |= 1 << 5;
+		if (!string.IsNullOrEmpty(column.BaseColumnName)) nullFlags |= 1 << 6;
+		if (!string.IsNullOrEmpty(column.BaseTableName)) nullFlags |= 1 << 7;
+
+		return nullFlags;
+	}
+
+	private TypeCodeEnum GetTypeCode()
+	{
+		var type = column.DataType;
+
+		if (type == typeof(bool)) return TypeCodeEnum.Boolean;
+		if (type == typeof(short) || type == typeof(int)) return TypeCodeEnum.Int32;
+		if (type == typeof(long)) return TypeCodeEnum.Int64;
+		if (type == typeof(float)) return TypeCodeEnum.Float32;
+		if (type == typeof(double)) return TypeCodeEnum.Float64;
+		if (type == typeof(decimal)) return TypeCodeEnum.Number;
+		if (type == typeof(DateTime)) return TypeCodeEnum.DateTime;
+		if (type == typeof(Guid)) return TypeCodeEnum.Guid;
+		if (type == typeof(string)) return TypeCodeEnum.String;
+		if (type == typeof(byte[])) return TypeCodeEnum.Binary;
+		return TypeCodeEnum.String;
+	}
+
+	public IValueObject GetValueObject()
+	{
+		if (fieldTypeCode == TypeCodeEnum.Number) return new NumberValue();
+		throw new NotImplementedException();
+	}
+}
+
+public enum TypeCodeEnum
+{
+	Boolean = 0x01,
+	Int32 = 0x02,
+	Int64 = 0x03,
+	Float32 = 0x04,
+	Float64 = 0x05,
+	DateTime = 0x06,
+	IntervalDayToSecond = 0x07,
+	IntervalYearToMonth = 0x08,
+	Guid = 0x09,
+	String = 0x10,
+	Binary = 0x11,
+	Number = 0x20
+}
+
+public struct IntervalDayToSecond
+{
+	public int Days { get; }
+	public int Hours { get; }
+	public int Minutes { get; }
+	public int Seconds { get; }
+	public int Nanoseconds { get; }
+}
+
+public struct IntervalYearToMonth
+{
+	public int Years { get; }
+	public int Months { get; }
 }

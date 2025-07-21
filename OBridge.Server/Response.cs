@@ -55,7 +55,6 @@ public class Response
 	{
 		buffer.Position = 0;
 		await buffer.CopyToAsync(output, token);
-		await output.FlushAsync(token);
 	}
 
 	public byte[] ToArray() => buffer.ToArray();
@@ -64,11 +63,18 @@ public class Response
 	{
 		buffer.SetLength(0);
 	}
+
+	public void WriteByte(sbyte value)
+	{
+		WriteByte(unchecked((byte)value));
+	}
 }
 
 public enum ResponseTypeEnum
 {
 	ConnectionSuccess = 0,
+	TableHeader = 0x01,
+	RowData = 0x02,
 	Error = 0x10,
-	OracleQueryError = 0x20,
+	OracleQueryError = 0x11,
 }
