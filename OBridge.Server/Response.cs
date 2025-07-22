@@ -97,6 +97,7 @@ public enum ResponseTypeEnum
 	ConnectionSuccess = 0,
 	TableHeader = 0x01,
 	RowData = 0x02,
+	EndOfRowStream = 0x03,
 	Error = 0x10,
 	OracleQueryError = 0x11,
 }
