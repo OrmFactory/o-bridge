@@ -1,11 +1,12 @@
-﻿using System;
+﻿using Oracle.ManagedDataAccess.Client;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using Oracle.ManagedDataAccess.Client;
 using ZstdSharp;
 
 namespace OBridge.Server;
@@ -110,12 +111,20 @@ public class Session : IAsyncDisposable
 		{
 			connection = new OracleConnection(credentials.ConnectionString);
 			await connection.OpenAsync(token);
+			await SetUtcTimeZone();
 		}
 		catch (Exception e)
 		{
 			await ReportError(ErrorCodeEnum.ConnectionFailed, e.Message);
 			throw e;
 		}
+	}
+
+	private async Task SetUtcTimeZone()
+	{
+		await using var command = connection.CreateCommand();
+		command.CommandText = "ALTER SESSION SET TIME_ZONE = 'UTC'";
+		await command.ExecuteNonQueryAsync(token);
 	}
 
 	private async Task ReportConnectionSuccess()
