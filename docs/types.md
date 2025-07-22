@@ -11,7 +11,7 @@ This document describes **binary serialization rules** for all supported value t
 ### `String` (0x10)
 
 ```
-[int32 Length][UTF-8 bytes]
+[7BitEncodedInt Length][UTF-8 bytes]
 ```
 
 - Length in bytes (not characters).
@@ -20,7 +20,7 @@ This document describes **binary serialization rules** for all supported value t
 ### `Binary` (0x11)
 
 ```
-[int32 Length][Raw Bytes]
+[7BitEncodedInt Length][Raw Bytes]
 ```
 
 - Used for Oracle `RAW`, `BLOB`, etc.
@@ -60,10 +60,8 @@ Meta byte: highest bit `1`, remaining 7 bits = integer value.
 | Type Name           | Code | Size | Description                       |
 | ------------------- | ---- | ---- | --------------------------------- |
 | Boolean             | 0x01 | 1    | `0x00` or `0x01`                  |
-| Int32               | 0x02 | 4    | little-endian                     |
-| Int64               | 0x03 | 8    | little-endian                     |
-| Float32             | 0x04 | 4    | IEEE 754                          |
-| Float64             | 0x05 | 8    | IEEE 754                          |
+| Float               | 0x04 | 4    | IEEE 754                          |
+| Double              | 0x05 | 8    | IEEE 754                          |
 | DateTime            | 0x06 | 8    | ticks (Int64)                     |
 | IntervalDayToSecond | 0x07 | var  |                                   |
 | IntervalYearToMonth | 0x08 | var  |                                   |

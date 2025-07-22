@@ -151,7 +151,6 @@ public class Column
 		response.WriteString(column.ColumnName ?? "");
 		response.WriteByte((byte)fieldTypeCode);
 
-
 		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
 		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);
 		if (IsFieldPresent(2)) response.WriteByte((byte)column.NumericPrecision!.Value);
@@ -182,13 +181,22 @@ public class Column
 	{
 		var type = column.DataType;
 
+		var dataType = column.DataTypeName?.ToLower() ?? "";
+
+		if (dataType.StartsWith("number")) return TypeCodeEnum.Number;
+		if (dataType == "date") return TypeCodeEnum.DateTime;
+		if (dataType.StartsWith("timestamp"))
+		{
+			if (dataType == "timestamp with time zone") return TypeCodeEnum.DateTimeTz;
+			return TypeCodeEnum.DateTime;
+		}
+
+		if (dataType == "interval year to month") return TypeCodeEnum.IntervalYearToMonth;
+		if (dataType == "interval day to second") return TypeCodeEnum.IntervalDayToSecond;
+
 		if (type == typeof(bool)) return TypeCodeEnum.Boolean;
-		if (type == typeof(short) || type == typeof(int)) return TypeCodeEnum.Int32;
-		if (type == typeof(long)) return TypeCodeEnum.Int64;
-		if (type == typeof(float)) return TypeCodeEnum.Float32;
-		if (type == typeof(double)) return TypeCodeEnum.Float64;
-		if (type == typeof(decimal)) return TypeCodeEnum.Number;
-		if (type == typeof(DateTime)) return TypeCodeEnum.DateTime;
+		if (type == typeof(float)) return TypeCodeEnum.Float;
+		if (type == typeof(double)) return TypeCodeEnum.Double;
 		if (type == typeof(Guid)) return TypeCodeEnum.Guid;
 		if (type == typeof(string)) return TypeCodeEnum.String;
 		if (type == typeof(byte[])) return TypeCodeEnum.Binary;
@@ -197,38 +205,34 @@ public class Column
 
 	public IValueObject GetValueObject()
 	{
-		if (fieldTypeCode == TypeCodeEnum.Number) return new NumberValue();
-		throw new NotImplementedException();
+		return fieldTypeCode switch
+		{
+			TypeCodeEnum.Boolean => new BooleanValue(),
+			TypeCodeEnum.Float => new FloatValue(),
+			TypeCodeEnum.Double => new DoubleValue(),
+			TypeCodeEnum.Number => new NumberValue(),
+			TypeCodeEnum.DateTime => new DateTimeValue(column.NumericScale ?? 0, false),
+			TypeCodeEnum.DateTimeTz => new DateTimeValue(column.NumericScale ?? 0, true),
+			TypeCodeEnum.IntervalDayToSecond => new IntervalDayToSecond(column.NumericScale ?? 0),
+			TypeCodeEnum.IntervalYearToMonth => new IntervalYearToMonth(),
+			TypeCodeEnum.Guid => new GuidValue(),
+			TypeCodeEnum.String => new StringValue(),
+			_ => throw new NotImplementedException()
+		};
 	}
 }
 
 public enum TypeCodeEnum
 {
 	Boolean = 0x01,
-	Int32 = 0x02,
-	Int64 = 0x03,
-	Float32 = 0x04,
-	Float64 = 0x05,
-	DateTime = 0x06,
+	Float = 0x03,
+	Double = 0x04,
+	DateTime = 0x05,
+	DateTimeTz = 0x06,
 	IntervalDayToSecond = 0x07,
 	IntervalYearToMonth = 0x08,
 	Guid = 0x09,
 	String = 0x10,
 	Binary = 0x11,
-	Number = 0x20
-}
-
-public struct IntervalDayToSecond
-{
-	public int Days { get; }
-	public int Hours { get; }
-	public int Minutes { get; }
-	public int Seconds { get; }
-	public int Nanoseconds { get; }
-}
-
-public struct IntervalYearToMonth
-{
-	public int Years { get; }
-	public int Months { get; }
+	Number = 0x20,
 }

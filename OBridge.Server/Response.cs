@@ -1,4 +1,5 @@
 ﻿using System.Buffers.Binary;
+using System.IO;
 using System.Text;
 
 namespace OBridge.Server;
@@ -17,6 +18,12 @@ public class Response
 	public void WriteByte(byte value)
 	{
 		buffer.WriteByte(value);
+	}
+
+	public void WriteInt16(short value)
+	{
+		BinaryPrimitives.WriteInt16LittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 2);
 	}
 
 	public void WriteInt32(int value)
@@ -44,10 +51,8 @@ public class Response
 
 	public void WriteString(string value)
 	{
-		int byteCount = encoding.GetByteCount(value);
-		Write7BitEncodedInt(byteCount);
-
-		byte[] bytes = encoding.GetBytes(value);
+		var bytes = encoding.GetBytes(value);
+		Write7BitEncodedInt(bytes.Length);
 		buffer.Write(bytes, 0, bytes.Length);
 	}
 
@@ -67,6 +72,23 @@ public class Response
 	public void WriteByte(sbyte value)
 	{
 		WriteByte(unchecked((byte)value));
+	}
+
+	public void WriteFloat(float value)
+	{
+		BinaryPrimitives.WriteSingleLittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 4);
+	}
+
+	public void WriteDouble(double value)
+	{
+		BinaryPrimitives.WriteDoubleLittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 8);
+	}
+
+	public void WriteBytes(byte[] bytes)
+	{
+		buffer.Write(bytes, 0, bytes.Length);
 	}
 }
 
