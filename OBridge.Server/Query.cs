@@ -2,6 +2,7 @@
 using Oracle.ManagedDataAccess.Types;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ public class Query
 	private readonly Stream stream;
 	private readonly CancellationToken token;
 	private string query;
+	private CommandBehavior commandBehavior = CommandBehavior.Default;
 
 	private CancellationTokenSource? queryCts;
 	private Task? queryTask;
@@ -27,6 +29,11 @@ public class Query
 
 	public async Task ReadQuery(AsyncBinaryReader reader)
 	{
+		byte behavior = await reader.ReadByteAsync();
+
+		//remove SequentialAccess flag
+		commandBehavior = (CommandBehavior)(behavior & 31);
+
 		reader.MaxStringBytes = 1024 * 1024;
 		query = await reader.ReadStringAsync();
 	}
@@ -55,9 +62,9 @@ public class Query
 		{
 			await using var cmd = connection.CreateCommand();
 			cmd.CommandText = query;
-			cmd.CommandType = System.Data.CommandType.Text;
+			cmd.CommandType = CommandType.Text;
 
-			await using var reader = await cmd.ExecuteReaderAsync(stopQueryToken);
+			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken);
 			var schema = await reader.GetColumnSchemaAsync(stopQueryToken);
 			var columnCount = schema.Count;
 			var columnsHeader = new Response(ResponseTypeEnum.TableHeader);

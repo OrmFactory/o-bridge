@@ -28,19 +28,6 @@ Total: **8 bytes**. This header must be sent immediately upon opening the TCP co
 01           // Flags: compression enabled (0x01)
 00 00        // Reserved
 ```
-## Request Frame Structure
-
-All client requests follow a common binary format:
-
-```
-[CommandCode: byte]
-[PayloadLength: int32]   // big-endian
-[Payload: bytes]
-```
-
-- `CommandCode`: identifies the type of command (see command list below).
-- `PayloadLength`: length of the payload in bytes (not including the header).
-- `Payload`: command-specific data.
 
 ### Invalid Handshake
 
@@ -105,7 +92,8 @@ The `Query` command is used for **all SQL execution**, including:
 ### Payload Structure:
 
 ```
-[SqlLength: int32]
+[CommandBehavior: byte]
+[SqlLength: 7BitEncodedInt]
 [SqlText: UTF-8 bytes]
 [ParameterBlock: bytes] // optional, see parameter encoding spec
 ```
