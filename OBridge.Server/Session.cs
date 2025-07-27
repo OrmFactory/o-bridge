@@ -47,7 +47,7 @@ public class Session : IAsyncDisposable
 		credentials = await ReadCredentials();
 		await TryConnect();
 
-		ReportConnectionSuccess();
+		await ReportConnectionSuccess();
 
 		if (enableCompression)
 		{
@@ -215,8 +215,8 @@ public class ConnectionCredentials
 
 public enum ErrorCodeEnum
 {
-	ConnectionModeDisabled,
-	ConnectionFailed,
-	QueryCancelledByClient,
-	QueryExecutionFailed
+	ConnectionModeDisabled = 0x01,
+	ConnectionFailed = 0x02,
+	QueryCancelledByClient = 0x20,
+	QueryExecutionFailed = 0x30
 }

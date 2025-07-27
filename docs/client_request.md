@@ -74,13 +74,18 @@ Server will use environment or fixed configuration to resolve remaining Oracle c
 - Query commands (`0x20`) initiate a **streaming result**.
 - While a query is in progress, only `CancelFetch` is permitted.
 ## Commands
-| Code (`byte`) | Command               | Payload Details            | Description                                |
-| ------------- | --------------------- | -------------------------- | ------------------------------------------ |
-| `0x10`        | `BeginTransaction`    | _(empty)_                  | Starts an Oracle transaction               |
-| `0x11`        | `CommitTransaction`   | _(empty)_                  | Commits the current transaction            |
-| `0x12`        | `RollbackTransaction` | _(empty)_                  | Rolls back the current transaction         |
-| `0x20`        | `Query`               | `SqlText + ParameterBlock` | Executes a SQL command (SELECT, DML, etc.) |
-| `0x30`        | `CancelFetch`         | _(empty)_                  | Terminates an in-progress query stream     |
+| Code (`byte`) | Command               | Payload Details                          | Description                                |
+| ------------- | --------------------- | ---------------------------------------- | ------------------------------------------ |
+| `0x02`        | `ConnectNamed`        | server text + login text + password text |                                            |
+| `0x03`        | `ConnectProxy`        | connection string text                   |                                            |
+| `0x10`        | `BeginTransaction`    | _(empty)_                                | Starts an Oracle transaction               |
+| `0x11`        | `CommitTransaction`   | _(empty)_                                | Commits the current transaction            |
+| `0x12`        | `RollbackTransaction` | _(empty)_                                | Rolls back the current transaction         |
+| `0x20`        | `Query`               | `SqlText` + `ParameterBlock`             | Executes a SQL command (SELECT, DML, etc.) |
+| `0x21`        | `QueryPrepared`       | `StatementId` + `ParameterBlock`         | Executes a prepared SQL statement          |
+| `0x22`        | `Prepare`             | `StatementId` + `SqlText`                | Prepares a SQL command                     |
+| `0x23`        | `ClosePrepared`       | `StatementId`                            | Releases prepared cmd handle               |
+| `0x30`        | `CancelFetch`         | _(empty)_                                | Terminates an in-progress query stream     |
 ## Query Command (`0x20`)
 
 The `Query` command is used for **all SQL execution**, including:

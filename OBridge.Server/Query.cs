@@ -63,6 +63,8 @@ public class Query
 			await using var cmd = connection.CreateCommand();
 			cmd.CommandText = query;
 			cmd.CommandType = CommandType.Text;
+			//
+			cmd.InitialLONGFetchSize = -1;
 
 			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken);
 			var schema = await reader.GetColumnSchemaAsync(stopQueryToken);
