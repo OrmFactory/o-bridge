@@ -55,6 +55,32 @@ Meta byte: highest bit `1`, remaining 7 bits = integer value.
 - Value: `42` → Meta `0x82`
 - Value: `-123.45` → Meta `0xC5`, Scale `-2`, Digits: `0x12 0x34 0x50`
 
+## Timestamp
+
+| Field               | Bits | Range         | Notes                                                                 |
+| ------------------- | ---- | ------------- | --------------------------------------------------------------------- |
+| `DateOnly`          | 1    | 0/1           | If 1 → only date is stored, no fraction, no timezone offset           |
+| `HasFraction`       | 1    | 0/1           | If 1 → fractional seconds included                                    |
+| `HasTimezoneOffset` | 1    | 0/1           | If 1 → 2 extra bytes (UTC offset in minutes)                          |
+| *Reserved*          | 4    |               |                                                                       |
+| `Year`              | 15   | -9999 to 9999 | sign + 14 bit                                                         |
+| `Month`             | 4    | 1–12          |                                                                       |
+| `Day`               | 5    | 1–31          |                                                                       |
+| `Hour`              | 5    | 0–23          |                                                                       |
+| `Minute`            | 6    | 0–59          |                                                                       |
+| `Second`            | 6    | 0–59          |                                                                       |
+| `Fraction`          | 0–30 | 0–999_999_999 | 1–4 bytes depending on precision (up to 9 digits), if `HasFraction=1` |
+| `Time zone offset`  | 16   | -32768–32767  | Signed offset in minutes from UTC (2 bytes), if `HasTimezoneOffset=1` |
+### Fractional Encoding
+
+The number of digits (precision) is controlled externally. Depending on the desired precision (1–9), the minimal number of bytes are used to store the scaled `nanosecond` value:
+
+| Precision (digits) | Max Value   | Bytes |
+| ------------------ | ----------- | ----- |
+| 1–2                | ≤ 99        | 1     |
+| 3–4                | ≤ 9999      | 2     |
+| 5–6                | ≤ 999999    | 3     |
+| 7–9                | ≤ 999999999 | 4     |
 ## Summary Table
 
 | Type Name           | Code | Size | Description                       |
@@ -62,7 +88,7 @@ Meta byte: highest bit `1`, remaining 7 bits = integer value.
 | Boolean             | 0x01 | 1    | `0x00` or `0x01`                  |
 | Float               | 0x04 | 4    | IEEE 754                          |
 | Double              | 0x05 | 8    | IEEE 754                          |
-| DateTime            | 0x06 | 8    | ticks (Int64)                     |
+| DateTime            | 0x06 | var  |                                   |
 | IntervalDayToSecond | 0x07 | var  |                                   |
 | IntervalYearToMonth | 0x08 | var  |                                   |
 | Guid                | 0x09 | 16   | raw GUID                          |

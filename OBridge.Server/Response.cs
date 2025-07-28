@@ -26,15 +26,33 @@ public class Response
 		buffer.Write(intBuffer, 0, 2);
 	}
 
+	public void WriteUInt16(ushort value)
+	{
+		BinaryPrimitives.WriteUInt16LittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 2);
+	}
+
 	public void WriteInt32(int value)
 	{
 		BinaryPrimitives.WriteInt32LittleEndian(intBuffer, value);
 		buffer.Write(intBuffer, 0, 4);
 	}
 
+	public void WriteUInt32(uint value)
+	{
+		BinaryPrimitives.WriteUInt32LittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 4);
+	}
+
 	public void WriteInt64(long value)
 	{
 		BinaryPrimitives.WriteInt64LittleEndian(intBuffer, value);
+		buffer.Write(intBuffer, 0, 8);
+	}
+
+	public void WriteUInt64(ulong value)
+	{
+		BinaryPrimitives.WriteUInt64LittleEndian(intBuffer, value);
 		buffer.Write(intBuffer, 0, 8);
 	}
 
@@ -86,9 +104,14 @@ public class Response
 		buffer.Write(intBuffer, 0, 8);
 	}
 
-	public void WriteBytes(byte[] bytes)
+	public void WriteBytes(params byte[] bytes)
 	{
 		buffer.Write(bytes, 0, bytes.Length);
+	}
+
+	public void WriteBytes(byte[] bytes, int length)
+	{
+		buffer.Write(bytes, 0, length);
 	}
 }
 
