@@ -47,6 +47,7 @@ public class DateTimeValue : IValueObject
 		minute = ts.Minute;
 		second = ts.Second;
 		nanosecond = ts.Nanosecond;
+		timeZoneOffsetMinutes = 0;
 	}
 
 	public void Serialize(Response row)

@@ -8,8 +8,8 @@ public class Column
 	private readonly DbColumn column;
 	private readonly int ordinal;
 	private readonly byte fieldPresenceMask = 0;
-	private readonly TypeCodeEnum fieldTypeCode;
 
+	public readonly IValueObject ValueObject;
 	public int Ordinal => ordinal;
 
 	public bool IsNullable => column.AllowDBNull ?? true;
@@ -24,14 +24,13 @@ public class Column
 		this.column = column;
 		this.ordinal = column.ColumnOrdinal ?? throw new Exception();
 		fieldPresenceMask = GetFieldPresenceMask();
-		fieldTypeCode = GetTypeCode();
+		ValueObject = CreateValueObject();
 	}
 
 	public void WriteHeader(Response response)
 	{
 		response.WriteByte(fieldPresenceMask);
 		response.WriteString(column.ColumnName ?? "");
-		response.WriteByte((byte)fieldTypeCode);
 
 		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
 		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);
@@ -59,47 +58,29 @@ public class Column
 		return nullFlags;
 	}
 
-	private TypeCodeEnum GetTypeCode()
+	private IValueObject CreateValueObject()
 	{
 		var type = column.DataType;
 
 		var dataType = column.DataTypeName?.ToLower() ?? "";
 
-		if (dataType.StartsWith("number")) return TypeCodeEnum.Number;
-		if (dataType == "date") return TypeCodeEnum.DateTime;
+		if (dataType.StartsWith("number")) return new NumberValue();
+		if (dataType == "date") return new DateTimeValue(column.NumericScale ?? 0, false);
 		if (dataType.StartsWith("timestamp"))
 		{
-			if (dataType == "timestamp with time zone") return TypeCodeEnum.DateTimeTz;
-			return TypeCodeEnum.DateTime;
+			if (dataType == "timestamp with time zone") return new DateTimeValue(column.NumericScale ?? 0, true);
+			return new DateTimeValue(column.NumericScale ?? 0, false);
 		}
 
-		if (dataType == "interval year to month") return TypeCodeEnum.IntervalYearToMonth;
-		if (dataType == "interval day to second") return TypeCodeEnum.IntervalDayToSecond;
+		if (dataType == "interval year to month") return new IntervalYearToMonth();
+		if (dataType == "interval day to second") return new IntervalDayToSecond(column.NumericScale ?? 0);
 
-		if (type == typeof(bool)) return TypeCodeEnum.Boolean;
-		if (type == typeof(float)) return TypeCodeEnum.Float;
-		if (type == typeof(double)) return TypeCodeEnum.Double;
-		if (type == typeof(Guid)) return TypeCodeEnum.Guid;
-		if (type == typeof(string)) return TypeCodeEnum.String;
-		if (type == typeof(byte[])) return TypeCodeEnum.Binary;
-		return TypeCodeEnum.String;
-	}
-
-	public IValueObject GetValueObject()
-	{
-		return fieldTypeCode switch
-		{
-			TypeCodeEnum.Boolean => new BooleanValue(),
-			TypeCodeEnum.Float => new FloatValue(),
-			TypeCodeEnum.Double => new DoubleValue(),
-			TypeCodeEnum.Number => new NumberValue(),
-			TypeCodeEnum.DateTime => new DateTimeValue(column.NumericScale ?? 0, false),
-			TypeCodeEnum.DateTimeTz => new DateTimeValue(column.NumericScale ?? 0, true),
-			TypeCodeEnum.IntervalDayToSecond => new IntervalDayToSecond(column.NumericScale ?? 0),
-			TypeCodeEnum.IntervalYearToMonth => new IntervalYearToMonth(),
-			TypeCodeEnum.Guid => new GuidValue(),
-			TypeCodeEnum.String => new StringValue(),
-			_ => throw new NotImplementedException()
-		};
+		if (type == typeof(bool)) return new BooleanValue();
+		if (type == typeof(float)) return new FloatValue();
+		if (type == typeof(double)) return new DoubleValue();
+		if (type == typeof(Guid)) return new GuidValue();
+		if (type == typeof(string)) return new StringValue();
+		if (type == typeof(byte[])) return new BinaryValue();
+		return new StringValue();
 	}
 }

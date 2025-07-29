@@ -104,7 +104,7 @@ public class Query
 				{
 					if (!reader.IsDBNull(column.Ordinal))
 					{
-						var val = column.GetValueObject();
+						var val = column.ValueObject;
 						val.LoadFromReader(reader, column.Ordinal);
 						val.Serialize(row);
 					}
