@@ -57,30 +57,35 @@ Meta byte: highest bit `1`, remaining 7 bits = integer value.
 
 ## Timestamp
 
-| Field               | Bits | Range         | Notes                                                                 |
-| ------------------- | ---- | ------------- | --------------------------------------------------------------------- |
-| `DateOnly`          | 1    | 0/1           | If 1 → only date is stored, no fraction, no timezone offset           |
-| `HasFraction`       | 1    | 0/1           | If 1 → fractional seconds included                                    |
-| `HasTimezoneOffset` | 1    | 0/1           | If 1 → 2 extra bytes (UTC offset in minutes)                          |
-| *Reserved*          | 4    |               |                                                                       |
-| `Year`              | 15   | -9999 to 9999 | sign + 14 bit                                                         |
-| `Month`             | 4    | 1–12          |                                                                       |
-| `Day`               | 5    | 1–31          |                                                                       |
-| `Hour`              | 5    | 0–23          |                                                                       |
-| `Minute`            | 6    | 0–59          |                                                                       |
-| `Second`            | 6    | 0–59          |                                                                       |
-| `Fraction`          | 0–30 | 0–999_999_999 | 1–4 bytes depending on precision (up to 9 digits), if `HasFraction=1` |
-| `Time zone offset`  | 16   | -32768–32767  | Signed offset in minutes from UTC (2 bytes), if `HasTimezoneOffset=1` |
-### Fractional Encoding
+| Field               | Bits | Range                  | Notes                                                       |
+| ------------------- | ---- | ---------------------- | ----------------------------------------------------------- |
+| `DateOnly`          | 1    | 0/1                    | If 1 → only date is stored, no fraction, no timezone offset |
+| `HasFraction`       | 1    | 0/1                    | If 1 → fractional seconds included                          |
+| `HasTimezoneOffset` | 1    | 0/1                    | If 1 → 2 extra bytes (UTC offset in minutes)                |
+| `YearSign`          | 1    | 0=positive, 1=negative | Sign bit                                                    |
+| `Year`              | 14   | 0 to 9999              | 14 bit integer                                              |
+| `Month`             | 4    | 1–12                   |                                                             |
+| `Day`               | 5    | 1–31                   |                                                             |
+| `Hour`              | 5    | 0–23                   |                                                             |
+| `Minute`            | 6    | 0–59                   |                                                             |
+| `Second`            | 6    | 0–59                   |                                                             |
+| `Fraction`          | 0–30 | 0–999_999_999          | depending on precision (up to 9 digits), if `HasFraction=1` |
+| `TimezoneSign`      | 1    | 0=positive, 1=negative |                                                             |
+| `Timezone offset`   | 10   | 0–840                  | Offset in minutes from UTC, absolute value                  |
+### Fraction part
 
-The number of digits (precision) is controlled externally. Depending on the desired precision (1–9), the minimal number of bytes are used to store the scaled `nanosecond` value:
+| Precision (digits) | Bit Count | Max Value   |
+|--------------------|-----------|-------------|
+| 1                  | 4         | 9           |
+| 2                  | 7         | 99          |
+| 3                  | 10        | 999         |
+| 4                  | 14        | 9999        |
+| 5                  | 17        | 99_999      |
+| 6                  | 20        | 999_999     |
+| 7                  | 24        | 9_999_999   |
+| 8                  | 27        | 99_999_999  |
+| 9                  | 30        | 999_999_999 |
 
-| Precision (digits) | Max Value   | Bytes |
-| ------------------ | ----------- | ----- |
-| 1–2                | ≤ 99        | 1     |
-| 3–4                | ≤ 9999      | 2     |
-| 5–6                | ≤ 999999    | 3     |
-| 7–9                | ≤ 999999999 | 4     |
 ## Summary Table
 
 | Type Name           | Code | Size | Description                       |

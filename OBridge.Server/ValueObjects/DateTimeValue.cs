@@ -55,38 +55,30 @@ public class DateTimeValue : IValueObject
 		var hasTimezone = containsTimeZone && timeZoneOffsetMinutes != 0;
 		var isDateOnly = hour == 0 && minute == 0 && second == 0 && !hasTimezone && !hasFraction;
 
-		// Header bits
-		uint dateOnlyValue = 0;
-		if (isDateOnly) dateOnlyValue |= 1U << 0;
-		if (hasFraction) dateOnlyValue |= 1U << 1;
-		if (hasTimezone) dateOnlyValue |= 1U << 2;
+		var writer = new BitWriter();
 
-		//reserved 4 bits
+		// --- Header bits ---
+		writer.AddBit(isDateOnly);
+		writer.AddBit(hasFraction);
+		writer.AddBit(hasTimezone);
 
-		// Year: 1 sign bit + 14-bit abs
-		uint yearBits = (uint)(Math.Abs(year) & 0x3FFF);
-		if (year < 0) yearBits |= 1U << 14;
-		dateOnlyValue |= (yearBits & 0x7FFF) << 7;
-
-		dateOnlyValue |= (uint)(month & 0xF) << 22;
-		dateOnlyValue |= (uint)(day & 0x1F) << 26;
+		// --- Date ---
+		int absYear = Math.Abs(year);
+		writer.AddBit(year < 0);
+		writer.AddBits(absYear, 14);
+		writer.AddBits(month, 4);
+		writer.AddBits(day, 5);
 
 		if (isDateOnly)
 		{
-			row.WriteUInt32(dateOnlyValue);
+			row.WriteBytes(writer.ToArray());
 			return;
 		}
 
-		ulong value = dateOnlyValue;
-
-		value |= (ulong)(hour & 0x1F) << 31;
-		value |= (ulong)(minute & 0x3F) << 36;
-		value |= (ulong)(second & 0x3F) << 41;
-
-		uint low = (uint)(value & 0xFFFF_FFFF);
-		ushort high = (ushort)((value >> 32) & 0xFFFF);
-		row.WriteUInt32(low);
-		row.WriteUInt16(high);
+		// --- Time ---
+		writer.AddBits(hour, 5);
+		writer.AddBits(minute, 6);
+		writer.AddBits(second, 6);
 
 		if (hasFraction)
 		{
@@ -94,33 +86,41 @@ public class DateTimeValue : IValueObject
 			int scaled = nanosecond;
 			if (scale > 0) scaled /= PowersOf10[scale];
 
-			if (secondsPrecision <= 2)
+			int totalBits = FractionBitLengths[secondsPrecision];
+			int highBits = Math.Min(4, totalBits);
+			int lowBits = totalBits - highBits;
+
+			writer.AddBits(scaled >> lowBits, highBits);
+
+			if (lowBits > 0)
 			{
-				// 1 byte
-				row.WriteByte((byte)scaled);
-			}
-			else if (secondsPrecision <= 4)
-			{
-				// 2 bytes
-				row.WriteUInt16((ushort)scaled);
-			}
-			else if (secondsPrecision <= 6)
-			{
-				// 3 bytes
-				row.WriteBytes((byte)(scaled >> 16), (byte)(scaled >> 8), (byte)scaled);
-			}
-			else
-			{
-				// 4 bytes
-				row.WriteUInt32((uint)scaled);
+				int lowValue = scaled & ((1 << lowBits) - 1);
+				writer.AddBits(lowValue, lowBits);
 			}
 		}
 
 		if (hasTimezone)
 		{
-			row.WriteInt16(timeZoneOffsetMinutes);
+			writer.AddBit(timeZoneOffsetMinutes < 0);
+			writer.AddBits(Math.Abs(timeZoneOffsetMinutes), 10);
 		}
+
+		row.WriteBytes(writer.ToArray());
 	}
+
+	private static readonly int[] FractionBitLengths = new int[]
+	{
+		0,  // precision 0
+		4,  // precision 1 (0..9)
+		7,  // precision 2 (0..99)
+		10, // precision 3 (0..999)
+		14, // precision 4
+		17, // precision 5
+		20, // precision 6
+		24, // precision 7
+		27, // precision 8
+		30  // precision 9
+	};
 
 	private static readonly int[] PowersOf10 = new int[]
 	{
