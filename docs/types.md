@@ -34,26 +34,44 @@ Binary serialization based on Oracle's flexible precision decimal format.
 [Meta: byte]    // (Meta & 0x80) == 0x80
 ```
 
-Meta byte: highest bit `1`, remaining 7 bits = integer value.
-## Format B: Compact decimal (BCD)
+- If the highest bit (`0x80`) is set, the remaining 7 bits represent an integer in range `0–127`.
+- No scale, no sign, no fractional part.
+
+### Format B: Compact decimal
 
 ```
-[Meta: byte]           // (Meta & 0x80) == 0
-[Scale: int8]          // decimal scale
-[Digits: bytes]        // BCD digits (two per byte)
+[Meta: byte]              // (Meta & 0x80) == 0
+[Scale: int8?]            // only present if scale == fallback
+[Digits: base100 bytes]   // big-endian, high bit marks end
 ```
 
-- `Meta`:
-    - Bit 7 (0x80): must be 0 (not unsigned integer)
-    - Bit 6 (0x40): **sign** (0 = positive, 1 = negative)
-    - Bits 0–5: number of decimal digits (0–63)
-- `Scale`: signed byte; e.g. `-2` = ÷100, `3` = ×1000
-- `Digits`: ceil(Digits / 2) bytes, big-endian BCD (high nibble first)
+#### Meta Byte Structure:
 
-**Examples:**
+| Bit | Meaning                                                                   |
+| --- | ------------------------------------------------------------------------- |
+| 7   | `0` = extended format (must be 0)                                         |
+| 6   | Sign: `0` = positive, `1` = negative                                      |
+| 0–5 | Biased scale: `0–62` interpreted as `scale = value - 32`; `63` = fallback |
 
-- Value: `42` → Meta `0x82`
-- Value: `-123.45` → Meta `0xC5`, Scale `-2`, Digits: `0x12 0x34 0x50`
+#### Scale:
+
+- If scale bits in Meta = `63`, the next byte is a full range scale with bias -130 `[-130;125]`.
+- Effective exponent (decimal scale) is `scale`, i.e. number is multiplied by 10^scale.
+
+#### Digits:
+
+- Base-100 digits (2 decimal digits per byte), big-endian.
+- Each digit byte:
+    - Bits `0–6`: value `0–99`
+    - Bit `7`: **set** on last digit byte
+
+#### Examples:
+
+- Value: `42` → Meta `0x82` (`0b10000010`) — Format A    
+- Value: `-123.45`
+    - Meta: `0x5E` (`sign = 1`, scale = -2)
+    - No extra scale byte
+    - Digits: `0x01 0x17 0xAD` — last digit has MSB set (`0xAD = 0x2D | 0x80`)
 
 ## Timestamp
 

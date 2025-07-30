@@ -60,8 +60,6 @@ public class Column
 
 	private IValueObject CreateValueObject()
 	{
-		var type = column.DataType;
-
 		var dataType = column.DataTypeName?.ToLower() ?? "";
 
 		if (dataType.StartsWith("number")) return new NumberValue();
@@ -74,13 +72,11 @@ public class Column
 
 		if (dataType == "interval year to month") return new IntervalYearToMonth();
 		if (dataType == "interval day to second") return new IntervalDayToSecond(column.NumericScale ?? 0);
-
-		if (type == typeof(bool)) return new BooleanValue();
-		if (type == typeof(float)) return new FloatValue();
-		if (type == typeof(double)) return new DoubleValue();
-		if (type == typeof(Guid)) return new GuidValue();
-		if (type == typeof(string)) return new StringValue();
-		if (type == typeof(byte[])) return new BinaryValue();
+		if (dataType is "char" or "nchar" or "varchar2" or "nvarchar2" or "clob" or "nclob") return new StringValue();
+		if (dataType is "raw" or "long raw" or "blob" or "bfile") return new BinaryValue();
+		if (dataType == "boolean") return new BooleanValue();
+		if (dataType == "binary_float") return new FloatValue();
+		if (dataType == "binary_double") return new DoubleValue();
 		return new StringValue();
 	}
 }

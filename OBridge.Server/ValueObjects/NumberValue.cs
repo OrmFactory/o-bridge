@@ -13,6 +13,7 @@ public class NumberValue : IValueObject
 
 	public void Serialize(Response row)
 	{
+		// Format A: single-byte unsigned integer
 		if (int.TryParse(number, out var intVal) && intVal >= 0 && intVal <= 127)
 		{
 			row.WriteByte((byte)(0x80 | intVal));
@@ -20,7 +21,6 @@ public class NumberValue : IValueObject
 		}
 
 		var value = number;
-
 		var negative = value.StartsWith("-");
 		if (negative) value = value.Substring(1);
 
@@ -32,21 +32,49 @@ public class NumberValue : IValueObject
 			value = value.Remove(dotIndex, 1);
 		}
 
+		// Trim leading zeros
 		value = value.TrimStart('0');
-		if (value == "") value = "0";
+		if (value == "")
+		{
+			value = "0";
+			scale = 0;
+		}
+
+		// Trim trailing zeros for base-100 compression
+		int trailingZeros = 0;
+		for (int i = value.Length - 1; i >= 0 && value[i] == '0'; i--)
+		{
+			trailingZeros++;
+		}
+		if (trailingZeros > 0)
+		{
+			value = value.Substring(0, value.Length - trailingZeros);
+			scale += trailingZeros;
+		}
 
 		int digitCount = value.Length;
-		byte meta = (byte)(digitCount & 0x3F);
-		if (negative) meta |= 0x40;
-		row.WriteByte(meta);
-		row.WriteByte((sbyte)scale);
+		int scaleBias = scale + 32;
+		var fallback = scaleBias is < 0 or > 62;
 
+		byte meta = 0x00;
+		if (negative) meta |= 0x40;
+		meta |= (byte)(fallback ? 63 : scaleBias);
+		row.WriteByte(meta);
+		if (fallback)
+		{
+			row.WriteByte((byte)(scale + 130));
+		}
+
+		// Write base-100 digits, big-endian, mark last byte
 		for (int i = 0; i < digitCount; i += 2)
 		{
-			byte high = (byte)(value[i] - '0');
-			byte low = (i + 1 < digitCount) ? (byte)(value[i + 1] - '0') : (byte)0;
-			byte bcd = (byte)((high << 4) | low);
-			row.WriteByte(bcd);
+			byte hi = (byte)(value[i] - '0');
+			byte lo = (i + 1 < digitCount) ? (byte)(value[i + 1] - '0') : (byte)0;
+			byte b100 = (byte)(hi * 10 + lo);
+
+			if (i + 2 >= digitCount) b100 |= 0x80;
+
+			row.WriteByte(b100);
 		}
 	}
 }
