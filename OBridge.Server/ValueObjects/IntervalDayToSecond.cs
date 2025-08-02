@@ -5,12 +5,13 @@ namespace OBridge.Server.ValueObjects;
 
 public class IntervalDayToSecond : IValueObject
 {
+	public readonly int SecondPrecision;
+
 	public int Days;
 	public int Hours;
 	public int Minutes;
 	public int Seconds;
 	public int FractionalSeconds;
-	public int SecondPrecision;
 	public bool IsNegative;
 
 	public IntervalDayToSecond(int secondPrecision)

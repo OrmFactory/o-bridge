@@ -31,6 +31,7 @@ public class Column
 	{
 		response.WriteByte(fieldPresenceMask);
 		response.WriteString(column.ColumnName ?? "");
+		response.WriteString(column.DataTypeName ?? "");
 
 		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
 		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);

@@ -93,7 +93,7 @@ If `SuccessWithData (0x01)` is returned:
 Repeat ColumnCount times:
 	[FieldPresenceMask: byte]
     [ColumnName: 7BitEncodedInt len + UTF8]
-    [TypeCode: byte]
+    [DataTypeName: 7BitEncodedInt len + UTF8]
     [Optional fields based on nullFlags...]
 ```
 
