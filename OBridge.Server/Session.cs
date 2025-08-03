@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using OBridge.Server.Config;
 using ZstdSharp;
 
 namespace OBridge.Server;
