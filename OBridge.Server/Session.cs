@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -98,6 +97,23 @@ public class Session : IAsyncDisposable
 	{
 		if (credentials.ConnectionString == "")
 		{
+			try
+			{
+				var server = settings.Servers.FirstOrDefault(s => s.ServerName == credentials.ServerName);
+				if (server == null) throw new Exception("Server name not found");
+				var userExist = server.Users.Any(u => u.Name == credentials.Login && u.Password == credentials.Password);
+				if (!userExist) throw new Exception("Invalid username or password");
+
+				connection = new OracleConnection(server.GetConnectionString());
+				await connection.OpenAsync(token);
+				await SetUtcTimeZone();
+			}
+			catch (Exception e)
+			{
+				await ReportError(ErrorCodeEnum.ConnectionFailed, e.Message);
+				throw e;
+			}
+			return;
 			await ReportError(ErrorCodeEnum.ConnectionModeDisabled, "Internal mode is not implemented");
 			throw new NotImplementedException("Internal mode is not implemented");
 		}
@@ -193,18 +209,18 @@ public class Session : IAsyncDisposable
 
 public class ConnectionCredentials
 {
-	private readonly string srv;
-	private readonly string login;
-	private readonly string password;
 	public bool InternalCredentials { get; } = false;
 
 	public string ConnectionString { get; } = "";
+	public string ServerName { get; }
+	public string Login { get; }
+	public string Password { get; }
 
-	public ConnectionCredentials(string srv, string login, string password)
+	public ConnectionCredentials(string server, string login, string password)
 	{
-		this.srv = srv;
-		this.login = login;
-		this.password = password;
+		this.ServerName = server;
+		this.Login = login;
+		this.Password = password;
 		InternalCredentials = true;
 	}
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Oracle.ManagedDataAccess.Client;
 using YamlDotNet.Serialization;
 
 namespace OBridge.Server.Config;
@@ -55,6 +56,24 @@ public class Server
 	public string? OraclePassword;
 
 	public List<User> Users = new();
+
+	public string GetConnectionString()
+	{
+		var sb = new OracleConnectionStringBuilder();
+		sb.UserID = OracleUser;
+		sb.Password = OraclePassword;
+		sb.DataSource = GetDataSource();
+		return sb.ToString();
+	}
+
+	private string GetDataSource()
+	{
+		var dataSource = OracleHost;
+		if (OraclePort != null) dataSource += ":" + OraclePort;
+		if (OracleServiceName != null) return dataSource + "/" + OracleServiceName;
+		if (OracleSID != null) return dataSource + "//" + OracleSID;
+		throw new InvalidOperationException("Either OracleServiceName or OracleSID must be provided.");
+	}
 }
 
 public class User
