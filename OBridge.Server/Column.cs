@@ -6,13 +6,13 @@ namespace OBridge.Server;
 public class Column
 {
 	private readonly DbColumn column;
-	private readonly int ordinal;
 	private readonly byte fieldPresenceMask = 0;
 
 	public readonly IValueObject ValueObject;
-	public int Ordinal => ordinal;
-
+	public int Ordinal => column.ColumnOrdinal ?? throw new Exception();
 	public bool IsNullable => column.AllowDBNull ?? true;
+
+	private readonly string dataTypeName;
 
 	public bool IsFieldPresent(int bit)
 	{
@@ -22,16 +22,24 @@ public class Column
 	public Column(DbColumn column)
 	{
 		this.column = column;
-		this.ordinal = column.ColumnOrdinal ?? throw new Exception();
 		fieldPresenceMask = GetFieldPresenceMask();
-		ValueObject = CreateValueObject();
+		if (column.DataTypeName != null)
+		{
+			ValueObject = CreateValueObjectFromDataTypeName();
+			dataTypeName = column.DataTypeName;
+		}
+		else
+		{
+			ValueObject = CreateValueFromDataType();
+			dataTypeName = ValueObject.GetDefaultTypeName();
+		}
 	}
 
 	public void WriteHeader(Response response)
 	{
 		response.WriteByte(fieldPresenceMask);
-		response.WriteString(column.ColumnName ?? "");
-		response.WriteString(column.DataTypeName ?? "");
+		response.WriteString(column.ColumnName);
+		response.WriteString(dataTypeName);
 
 		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
 		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);
@@ -59,16 +67,16 @@ public class Column
 		return nullFlags;
 	}
 
-	private IValueObject CreateValueObject()
+	private IValueObject CreateValueObjectFromDataTypeName()
 	{
 		var dataType = column.DataTypeName?.ToLower() ?? "";
 
 		if (dataType.StartsWith("number")) return new NumberValue();
-		if (dataType == "date") return new DateTimeValue(column.NumericScale ?? 0, false);
+		if (dataType == "date") return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithoutTimeZone);
 		if (dataType.StartsWith("timestamp"))
 		{
-			if (dataType == "timestamp with time zone") return new DateTimeValue(column.NumericScale ?? 0, true);
-			return new DateTimeValue(column.NumericScale ?? 0, false);
+			if (dataType == "timestamp with time zone") return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithTimeZone);
+			return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.LocalTimeZone);
 		}
 
 		if (dataType == "interval year to month") return new IntervalYearToMonth();
@@ -79,5 +87,17 @@ public class Column
 		if (dataType == "binary_float") return new FloatValue();
 		if (dataType == "binary_double") return new DoubleValue();
 		return new StringValue();
+	}
+
+	private IValueObject CreateValueFromDataType()
+	{
+		var dt = column.DataType;
+		if (dt == null) throw new Exception("DataType is null");
+
+		if (dt == typeof(string)) return new StringValue();
+		if (dt == typeof(decimal)) return new NumberValue();
+		if (dt == typeof(byte[])) return new BinaryValue();
+
+		throw new NotImplementedException();
 	}
 }

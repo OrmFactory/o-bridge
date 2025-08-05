@@ -15,4 +15,6 @@ public class BinaryValue : IValueObject
 	{
 		row.WriteBytes(bytes);
 	}
+
+	public string GetDefaultTypeName() => "RAW";
 }

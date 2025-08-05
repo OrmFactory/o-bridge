@@ -15,4 +15,6 @@ public class DoubleValue : IValueObject
 	{
 		row.WriteDouble(value);
 	}
+
+	public string GetDefaultTypeName() => "BINARY_DOUBLE";
 }

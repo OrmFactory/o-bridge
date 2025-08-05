@@ -77,4 +77,6 @@ public class NumberValue : IValueObject
 			row.WriteByte(b100);
 		}
 	}
+
+	public string GetDefaultTypeName() => "NUMBER";
 }

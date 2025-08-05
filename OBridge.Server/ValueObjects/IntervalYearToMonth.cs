@@ -29,4 +29,6 @@ public class IntervalYearToMonth : IValueObject
 		if (Years != 0) response.Write7BitEncodedInt(Years);
 		if (Months != 0) response.Write7BitEncodedInt(Months);
 	}
+
+	public string GetDefaultTypeName() => "INTERVAL YEAR TO MONTH";
 }

@@ -7,4 +7,5 @@ public interface IValueObject
 {
 	void LoadFromReader(OracleDataReader reader, int ordinal);
 	void Serialize(Response row);
+	string GetDefaultTypeName();
 }

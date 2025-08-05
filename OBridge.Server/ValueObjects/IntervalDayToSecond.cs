@@ -56,6 +56,8 @@ public class IntervalDayToSecond : IValueObject
 		if (SecondPrecision > 0 && FractionalSeconds != 0) response.Write7BitEncodedInt(FractionalSeconds);
 	}
 
+	public string GetDefaultTypeName() => "INTERVAL DAY TO SECOND";
+
 	private static readonly int[] PowersOf10 = new int[]
 	{
 		1,              // 10^0

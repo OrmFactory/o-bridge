@@ -15,4 +15,6 @@ public class StringValue : IValueObject
 	{
 		row.WriteString(value);
 	}
+
+	public string GetDefaultTypeName() => "VARCHAR2";
 }

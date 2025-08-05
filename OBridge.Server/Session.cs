@@ -114,8 +114,6 @@ public class Session : IAsyncDisposable
 				throw e;
 			}
 			return;
-			await ReportError(ErrorCodeEnum.ConnectionModeDisabled, "Internal mode is not implemented");
-			throw new NotImplementedException("Internal mode is not implemented");
 		}
 
 		if (credentials.ConnectionString != "" && !settings.EnableFullProxy)

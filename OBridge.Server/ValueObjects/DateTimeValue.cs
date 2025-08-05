@@ -6,7 +6,7 @@ namespace OBridge.Server.ValueObjects;
 public class DateTimeValue : IValueObject
 {
 	private readonly int secondsPrecision;
-	private readonly bool containsTimeZone;
+	private readonly TimeZoneEnum timeZone;
 	private int year;
 	private int month;
 	private int day;
@@ -17,15 +17,15 @@ public class DateTimeValue : IValueObject
 	
 	private short timeZoneOffsetMinutes;
 
-	public DateTimeValue(int secondsPrecision, bool containsTimeZone)
+	public DateTimeValue(int secondsPrecision, TimeZoneEnum timeZone)
 	{
 		this.secondsPrecision = secondsPrecision;
-		this.containsTimeZone = containsTimeZone;
+		this.timeZone = timeZone;
 	}
 
 	public void LoadFromReader(OracleDataReader reader, int ordinal)
 	{
-		if (containsTimeZone)
+		if (timeZone == TimeZoneEnum.WithTimeZone)
 		{
 			var tz = reader.GetOracleTimeStampTZ(ordinal);
 			timeZoneOffsetMinutes = (short)tz.GetTimeZoneOffset().TotalMinutes;
@@ -53,7 +53,7 @@ public class DateTimeValue : IValueObject
 	public void Serialize(Response row)
 	{
 		var hasFraction = secondsPrecision > 0 && nanosecond != 0;
-		var hasTimezone = containsTimeZone && timeZoneOffsetMinutes != 0;
+		var hasTimezone = timeZone == TimeZoneEnum.WithTimeZone && timeZoneOffsetMinutes != 0;
 		var isDateOnly = hour == 0 && minute == 0 && second == 0 && !hasTimezone && !hasFraction;
 
 		var writer = new BitWriter();
@@ -109,6 +109,14 @@ public class DateTimeValue : IValueObject
 		row.WriteBytes(writer.ToArray());
 	}
 
+	public string GetDefaultTypeName()
+	{
+		if (timeZone == TimeZoneEnum.WithoutTimeZone) return "DATE";
+		if (timeZone == TimeZoneEnum.WithTimeZone) return "TIMESTAMP WITH TIME ZONE";
+		if (timeZone == TimeZoneEnum.LocalTimeZone) return "TIMESTAMP WITH LOCAL TIME ZONE";
+		throw new Exception();
+	}
+
 	private static readonly int[] FractionBitLengths = new int[]
 	{
 		0,  // precision 0
@@ -136,4 +144,11 @@ public class DateTimeValue : IValueObject
 		100_000_000,    // 10^8
 		1_000_000_000   // 10^9
 	};
+}
+
+public enum TimeZoneEnum
+{
+	WithoutTimeZone,
+	WithTimeZone,
+	LocalTimeZone
 }

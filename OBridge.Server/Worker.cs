@@ -85,6 +85,10 @@ public class Worker : BackgroundService
 			await using var session = new Session(networkStream, settings, token, logger);
 			await session.Process();
 		}
+		catch (EndOfStreamException)
+		{
+			logger.LogDebug("Client closed session");
+		}
 		catch (Exception e)
 		{
 			logger.LogError(e, e.Message);
@@ -108,6 +112,10 @@ public class Worker : BackgroundService
 			await ssl.AuthenticateAsServerAsync(certificate, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
 			await using var session = new Session(ssl, settings, token, logger);
 			await session.Process();
+		}
+		catch (EndOfStreamException)
+		{
+			logger.LogDebug("Client closed session");
 		}
 		catch (Exception e)
 		{

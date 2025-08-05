@@ -15,4 +15,6 @@ public class FloatValue : IValueObject
 	{
 		row.WriteFloat(value);
 	}
+
+	public string GetDefaultTypeName() => "BINARY_FLOAT";
 }

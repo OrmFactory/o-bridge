@@ -15,4 +15,6 @@ public class BooleanValue : IValueObject
 	{
 		row.WriteByte(value ? (byte)1 : (byte)0);
 	}
+
+	public string GetDefaultTypeName() => "BOOLEAN";
 }
