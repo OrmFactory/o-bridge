@@ -72,11 +72,11 @@ public class Column
 		var dataType = column.DataTypeName?.ToLower() ?? "";
 
 		if (dataType.StartsWith("number")) return new NumberValue();
-		if (dataType == "date") return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithoutTimeZone);
+		if (dataType == "date") return new DateTimeValue(column.NumericScale ?? 0, DateTimeFormatEnum.Date);
 		if (dataType.StartsWith("timestamp"))
 		{
-			if (dataType == "timestamp with time zone") return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithTimeZone);
-			return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.LocalTimeZone);
+			if (dataType == "timestamp with time zone") return new DateTimeValue(column.NumericScale ?? 0, DateTimeFormatEnum.TimestampWithTimeZone);
+			return new DateTimeValue(column.NumericScale ?? 0, DateTimeFormatEnum.TimestampWithLocalTimeZone);
 		}
 
 		if (dataType == "interval year to month") return new IntervalYearToMonth();
@@ -102,8 +102,8 @@ public class Column
 		if (dt == typeof(double)) return new DoubleValue();
 		if (dt == typeof(float)) return new FloatValue();
 		if (dt == typeof(byte[])) return new BinaryValue();
-		if (dt == typeof(DateTimeOffset)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithTimeZone);
-		if (dt == typeof(DateTime)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithoutTimeZone);
+		if (dt == typeof(DateTimeOffset)) return new DateTimeValue(column.NumericScale ?? 0, DateTimeFormatEnum.TimestampWithTimeZone);
+		if (dt == typeof(DateTime)) return new DateTimeValue(column.NumericScale ?? 0, DateTimeFormatEnum.Date);
 
 		throw new NotImplementedException("Not implemented fallback for type '" + dt.FullName + "'");
 	}

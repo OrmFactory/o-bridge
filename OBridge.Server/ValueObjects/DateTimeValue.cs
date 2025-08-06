@@ -1,12 +1,13 @@
 ﻿using Oracle.ManagedDataAccess.Client;
 using System.Buffers.Binary;
+using System.Data;
 
 namespace OBridge.Server.ValueObjects;
 
 public class DateTimeValue : IValueObject
 {
 	private readonly int secondsPrecision;
-	private readonly TimeZoneEnum timeZone;
+	private readonly DateTimeFormatEnum dateTimeFormat;
 	private int year;
 	private int month;
 	private int day;
@@ -14,18 +15,17 @@ public class DateTimeValue : IValueObject
 	private int minute;
 	private int second;
 	private int nanosecond;
-	
 	private short timeZoneOffsetMinutes;
 
-	public DateTimeValue(int secondsPrecision, TimeZoneEnum timeZone)
+	public DateTimeValue(int secondsPrecision, DateTimeFormatEnum format)
 	{
 		this.secondsPrecision = secondsPrecision;
-		this.timeZone = timeZone;
+		this.dateTimeFormat = format;
 	}
 
 	public void LoadFromReader(OracleDataReader reader, int ordinal)
 	{
-		if (timeZone == TimeZoneEnum.WithTimeZone)
+		if (dateTimeFormat == DateTimeFormatEnum.TimestampWithTimeZone)
 		{
 			var tz = reader.GetOracleTimeStampTZ(ordinal);
 			timeZoneOffsetMinutes = (short)tz.GetTimeZoneOffset().TotalMinutes;
@@ -36,6 +36,20 @@ public class DateTimeValue : IValueObject
 			minute = tz.Minute;
 			second = tz.Second;
 			nanosecond = tz.Nanosecond;
+			return;
+		}
+
+		if (dateTimeFormat == DateTimeFormatEnum.Date)
+		{
+			var dt = reader.GetDateTime(ordinal);
+			year = dt.Year;
+			month = dt.Month;
+			day = dt.Day;
+			hour = dt.Hour;
+			minute = dt.Minute;
+			second = dt.Second;
+			nanosecond = 0;
+			timeZoneOffsetMinutes = 0;
 			return;
 		}
 
@@ -53,7 +67,7 @@ public class DateTimeValue : IValueObject
 	public void Serialize(Response row)
 	{
 		var hasFraction = secondsPrecision > 0 && nanosecond != 0;
-		var hasTimezone = timeZone == TimeZoneEnum.WithTimeZone && timeZoneOffsetMinutes != 0;
+		var hasTimezone = dateTimeFormat == DateTimeFormatEnum.TimestampWithTimeZone && timeZoneOffsetMinutes != 0;
 		var isDateOnly = hour == 0 && minute == 0 && second == 0 && !hasTimezone && !hasFraction;
 
 		var writer = new BitWriter();
@@ -111,9 +125,9 @@ public class DateTimeValue : IValueObject
 
 	public string GetDefaultTypeName()
 	{
-		if (timeZone == TimeZoneEnum.WithoutTimeZone) return "DATE";
-		if (timeZone == TimeZoneEnum.WithTimeZone) return "TIMESTAMP WITH TIME ZONE";
-		if (timeZone == TimeZoneEnum.LocalTimeZone) return "TIMESTAMP WITH LOCAL TIME ZONE";
+		if (dateTimeFormat == DateTimeFormatEnum.Date) return "DATE";
+		if (dateTimeFormat == DateTimeFormatEnum.TimestampWithTimeZone) return "TIMESTAMP WITH TIME ZONE";
+		if (dateTimeFormat == DateTimeFormatEnum.TimestampWithLocalTimeZone) return "TIMESTAMP WITH LOCAL TIME ZONE";
 		throw new Exception();
 	}
 
@@ -146,9 +160,9 @@ public class DateTimeValue : IValueObject
 	};
 }
 
-public enum TimeZoneEnum
+public enum DateTimeFormatEnum
 {
-	WithoutTimeZone,
-	WithTimeZone,
-	LocalTimeZone
+	Date,
+	TimestampWithTimeZone,
+	TimestampWithLocalTimeZone
 }
