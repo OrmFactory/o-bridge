@@ -96,6 +96,11 @@ public class Column
 
 		if (dt == typeof(string)) return new StringValue();
 		if (dt == typeof(decimal)) return new NumberValue();
+		if (dt == typeof(long)) return new NumberValue();
+		if (dt == typeof(int)) return new NumberValue();
+		if (dt == typeof(short)) return new NumberValue();
+		if (dt == typeof(double)) return new DoubleValue();
+		if (dt == typeof(float)) return new FloatValue();
 		if (dt == typeof(byte[])) return new BinaryValue();
 		if (dt == typeof(DateTimeOffset)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithTimeZone);
 		if (dt == typeof(DateTime)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithoutTimeZone);
