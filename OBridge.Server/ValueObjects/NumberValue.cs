@@ -52,6 +52,8 @@ public class NumberValue : IValueObject
 			scale += trailingZeros;
 		}
 
+		if ((value.Length & 1) == 1) value = "0" + value;
+			
 		int digitCount = value.Length;
 		int scaleBias = scale + 32;
 		var fallback = scaleBias is < 0 or > 62;
@@ -69,7 +71,7 @@ public class NumberValue : IValueObject
 		for (int i = 0; i < digitCount; i += 2)
 		{
 			byte hi = (byte)(value[i] - '0');
-			byte lo = (i + 1 < digitCount) ? (byte)(value[i + 1] - '0') : (byte)0;
+			byte lo = (byte)(value[i + 1] - '0');
 			byte b100 = (byte)(hi * 10 + lo);
 
 			if (i + 2 >= digitCount) b100 |= 0x80;
