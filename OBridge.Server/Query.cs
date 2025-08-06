@@ -90,7 +90,7 @@ public class Query
 				byte presenceMaskByte = 0;
 				foreach (var nullableColumn in nullableColumns)
 				{
-					if (reader.IsDBNull(nullableColumn.Ordinal)) presenceMaskByte |= bitMask;
+					if (!reader.IsDBNull(nullableColumn.Ordinal)) presenceMaskByte |= bitMask;
 					if (bitMask == 128)
 					{
 						bitMask = 1;

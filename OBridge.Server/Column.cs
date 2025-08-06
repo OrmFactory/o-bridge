@@ -97,7 +97,9 @@ public class Column
 		if (dt == typeof(string)) return new StringValue();
 		if (dt == typeof(decimal)) return new NumberValue();
 		if (dt == typeof(byte[])) return new BinaryValue();
+		if (dt == typeof(DateTimeOffset)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithTimeZone);
+		if (dt == typeof(DateTime)) return new DateTimeValue(column.NumericScale ?? 0, TimeZoneEnum.WithoutTimeZone);
 
-		throw new NotImplementedException();
+		throw new NotImplementedException("Not implemented fallback for type '" + dt.FullName + "'");
 	}
 }
