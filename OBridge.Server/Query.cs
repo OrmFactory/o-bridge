@@ -16,6 +16,7 @@ public class Query
 	private readonly CancellationToken token;
 	private string query;
 	private CommandBehavior commandBehavior = CommandBehavior.Default;
+	private List<OracleParameter> parameters;
 
 	private CancellationTokenSource? queryCts;
 	private Task? queryTask;
@@ -29,13 +30,95 @@ public class Query
 
 	public async Task ReadQuery(AsyncBinaryReader reader)
 	{
-		byte behavior = await reader.ReadByteAsync();
+		byte behavior = await reader.ReadByte().ConfigureAwait(false);
 
 		//remove SequentialAccess flag
 		commandBehavior = (CommandBehavior)(behavior & 31);
-
 		reader.MaxStringBytes = 1024 * 1024;
-		query = await reader.ReadStringAsync();
+		query = await reader.ReadString().ConfigureAwait(false);
+		await ReadParameters(reader).ConfigureAwait(false);
+	}
+
+	private async Task ReadParameters(AsyncBinaryReader reader)
+	{
+		parameters = new();
+		var parametersCount = await reader.Read7BitEncodedInt().ConfigureAwait(false);
+		
+		for (int i = 0; i < parametersCount; i++)
+		{
+			string name = await reader.ReadString().ConfigureAwait(false);
+			var dbType = (OracleDbType)await reader.ReadByte().ConfigureAwait(false);
+			var direction = (ParameterDirection)await reader.ReadByte().ConfigureAwait(false);
+
+			var p = new OracleParameter
+			{
+				ParameterName = name,
+				Direction = direction,
+				OracleDbType = dbType
+			};
+			parameters.Add(p);
+
+			var isNull = await reader.ReadBoolean().ConfigureAwait(false);
+			p.Value = isNull
+				? DBNull.Value
+				: await ReadValue(reader, dbType).ConfigureAwait(false);
+		}
+	}
+
+	private async Task<object?> ReadValue(AsyncBinaryReader reader, OracleDbType type)
+	{
+		switch (type)
+		{
+			case OracleDbType.Int16:
+				return await reader.ReadInt16().ConfigureAwait(false);
+
+			case OracleDbType.Int32:
+				return await reader.ReadInt32().ConfigureAwait(false);
+
+			case OracleDbType.Int64:
+				return await reader.ReadInt64().ConfigureAwait(false);
+
+			case OracleDbType.Single:
+			case OracleDbType.BinaryFloat:
+				return await reader.ReadFloat().ConfigureAwait(false);
+
+			case OracleDbType.Double:
+			case OracleDbType.BinaryDouble:
+				return await reader.ReadDouble().ConfigureAwait(false);
+
+			case OracleDbType.Decimal:
+				return await reader.ReadDecimal().ConfigureAwait(false);
+
+			case OracleDbType.Boolean:
+				return await reader.ReadBoolean().ConfigureAwait(false);
+
+			case OracleDbType.Date:
+				return await reader.ReadDateTime().ConfigureAwait(false);
+
+			case OracleDbType.TimeStamp:
+			case OracleDbType.TimeStampLTZ:
+			case OracleDbType.TimeStampTZ:
+				throw new NotImplementedException(type.ToString());
+
+			case OracleDbType.Char:
+			case OracleDbType.NChar:
+			case OracleDbType.Varchar2:
+			case OracleDbType.NVarchar2:
+			case OracleDbType.Clob:
+			case OracleDbType.NClob:
+			case OracleDbType.Json:
+			case OracleDbType.ArrayAsJson:
+			case OracleDbType.ObjectAsJson:
+				return await reader.ReadString().ConfigureAwait(false);
+
+			case OracleDbType.Raw:
+			case OracleDbType.LongRaw:
+			case OracleDbType.Blob:
+				return await reader.ReadBinary().ConfigureAwait(false);
+
+			default:
+				throw new NotSupportedException($"Unsupported OracleDbType: {type}");
+		}
 	}
 
 	public async Task Stop()
@@ -116,6 +199,7 @@ public class Query
 			await reader.CloseAsync();
 			var endOfStream = new Response(ResponseTypeEnum.EndOfRowStream);
 			endOfStream.Write7BitEncodedInt(reader.RecordsAffected);
+			WriteOutputParameters(endOfStream);
 			await endOfStream.SendAsync(stream, stopQueryToken);
 			await stream.FlushAsync(stopQueryToken);
 		}
@@ -131,6 +215,80 @@ public class Query
 			queryCts?.Dispose();
 			queryCts = null;
 			queryTask = null;
+		}
+	}
+
+	private void WriteOutputParameters(Response response)
+	{
+		var outputParameters = parameters
+			.Where(p => p.Direction == ParameterDirection.Output || p.Direction == ParameterDirection.ReturnValue)
+			.ToList();
+
+		response.Write7BitEncodedInt(outputParameters.Count);
+		foreach (var p in outputParameters)
+		{
+			response.WriteString(p.ParameterName);
+			response.WriteByte((byte)p.OracleDbType);
+			response.WriteByte((byte)p.Direction);
+			var isNull = p.Value == null || p.Value == DBNull.Value;
+			response.WriteBoolean(isNull);
+			if (!isNull) SerializeValue(response, p);
+		}
+	}
+
+	private void SerializeValue(Response response, OracleParameter parameter)
+	{
+		var value = parameter.Value;
+		var type = parameter.OracleDbType;
+
+		switch (type)
+		{
+			case OracleDbType.Int16:
+				response.WriteInt16(Convert.ToInt16(value));
+				break;
+			case OracleDbType.Int32:
+				response.WriteInt32(Convert.ToInt32(value));
+				break;
+			case OracleDbType.Int64:
+				response.WriteInt64(Convert.ToInt64(value));
+				break;
+			case OracleDbType.Single:
+			case OracleDbType.BinaryFloat:
+				response.WriteFloat(Convert.ToSingle(value));
+				break;
+			case OracleDbType.Double:
+			case OracleDbType.BinaryDouble:
+				response.WriteDouble(Convert.ToDouble(value));
+				break;
+			case OracleDbType.Decimal:
+				response.WriteDecimal(Convert.ToDecimal(value));
+				break;
+			case OracleDbType.Boolean:
+				response.WriteBoolean(Convert.ToBoolean(value));
+				break;
+			case OracleDbType.Date:
+				response.WriteDateTime(Convert.ToDateTime(value));
+				break;
+			case OracleDbType.TimeStamp:
+			case OracleDbType.TimeStampLTZ:
+			case OracleDbType.TimeStampTZ:
+				throw new NotImplementedException(type.ToString());
+			case OracleDbType.Char:
+			case OracleDbType.NChar:
+			case OracleDbType.Varchar2:
+			case OracleDbType.NVarchar2:
+			case OracleDbType.Clob:
+			case OracleDbType.NClob:
+			case OracleDbType.Json:
+				response.WriteString(Convert.ToString(value));
+				break;
+			case OracleDbType.Raw:
+			case OracleDbType.LongRaw:
+			case OracleDbType.Blob:
+				response.WriteBytes((byte[])value);
+				break;
+			default:
+				throw new NotSupportedException($"Unsupported OracleDbType: {type}");
 		}
 	}
 }

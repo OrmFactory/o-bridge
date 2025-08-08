@@ -56,7 +56,7 @@ public class Session : IAsyncDisposable
 
 		while (!token.IsCancellationRequested)
 		{
-			var command = await reader.ReadByteAsync();
+			var command = await reader.ReadByte();
 			if (command == 0x30)
 			{
 				var query = currentQuery;
@@ -164,20 +164,20 @@ public class Session : IAsyncDisposable
 
 	private async Task<ConnectionCredentials> ReadCredentials()
 	{
-		var credType = await reader.ReadByteAsync();
+		var credType = await reader.ReadByte();
 		if (credType == 2)
 		{
 			reader.MaxStringBytes = 1024;
-			var srv = await reader.ReadStringAsync();
-			var login = await reader.ReadStringAsync();
-			var password = await reader.ReadStringAsync();
+			var srv = await reader.ReadString();
+			var login = await reader.ReadString();
+			var password = await reader.ReadString();
 			return new ConnectionCredentials(srv, login, password);
 		}
 
 		if (credType == 3)
 		{
 			reader.MaxStringBytes = 4096;
-			var connectionString = await reader.ReadStringAsync();
+			var connectionString = await reader.ReadString();
 			return new ConnectionCredentials(connectionString);
 		}
 
@@ -186,7 +186,7 @@ public class Session : IAsyncDisposable
 
 	private async Task ReadHeader()
 	{
-		var header = await reader.ReadBytesAsync(8);
+		var header = await reader.ReadBytes(8);
 		var wrongHeaderEx = new Exception("Wrong header");
 		if (header[0] != 0x4F) throw wrongHeaderEx;
 		if (header[1] != 0x43) throw wrongHeaderEx;

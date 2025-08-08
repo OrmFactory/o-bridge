@@ -116,7 +116,6 @@ Then the server emits:
 
 ```
 [0x20 StreamRow]
-[PayloadLength: int32]
 [Payload: Row data (Flags + Column values)]
 ```
 
@@ -124,8 +123,9 @@ Then the server emits:
 
 ```
 [0x21 StreamEnd]
-[PayloadLength: int32]
-[Payload: optional message or JSON]
+[Rows affected: 7BitEncodedInt]
+[Returned parameters count: 7BitEncodedInt]
+[Parameters...]
 ```
 
 ## Cancellation Support
