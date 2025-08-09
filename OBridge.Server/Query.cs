@@ -58,6 +58,8 @@ public class Query
 			};
 			parameters.Add(p);
 
+			if (direction == ParameterDirection.Output || direction == ParameterDirection.ReturnValue) continue;
+
 			var isNull = await reader.ReadBoolean().ConfigureAwait(false);
 			p.Value = isNull
 				? DBNull.Value
@@ -148,6 +150,12 @@ public class Query
 			cmd.CommandType = CommandType.Text;
 			//
 			cmd.InitialLONGFetchSize = -1;
+			cmd.BindByName = true;
+
+			foreach (var parameter in parameters)
+			{
+				cmd.Parameters.Add(parameter);
+			}
 
 			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken);
 			var schema = await reader.GetColumnSchemaAsync(stopQueryToken);
@@ -241,28 +249,56 @@ public class Query
 		var value = parameter.Value;
 		var type = parameter.OracleDbType;
 
+		if (value is OracleDecimal dec)
+		{
+			//todo: send base100 number
+			switch (type)
+			{
+				case OracleDbType.Int16:
+					response.WriteInt16(dec.ToInt16());
+					break;
+				case OracleDbType.Int32:
+					response.WriteInt32(dec.ToInt32());
+					break;
+				case OracleDbType.Int64:
+					response.WriteInt64(dec.ToInt64());
+					break;
+				case OracleDbType.Decimal:
+					response.WriteDecimal(dec.Value);
+					break;
+				case OracleDbType.Single:
+					response.WriteFloat(dec.ToSingle());
+					break;
+				case OracleDbType.Double:
+					response.WriteDouble(dec.ToDouble());
+					break;
+				default:
+					throw new NotSupportedException($"Unsupported number OracleDbType: {type}");
+			}
+			return;
+		}
+
+		if (value is OracleDate date)
+		{
+			//todo: send DateTimeValue
+			if (type == OracleDbType.Date)
+			{
+				response.WriteDateTime(date.Value);
+				return;
+			}
+			throw new NotSupportedException($"Unsupported date OracleDbType: {type}");
+		}
+
 		switch (type)
 		{
-			case OracleDbType.Int16:
-				response.WriteInt16(Convert.ToInt16(value));
-				break;
-			case OracleDbType.Int32:
-				response.WriteInt32(Convert.ToInt32(value));
-				break;
-			case OracleDbType.Int64:
-				response.WriteInt64(Convert.ToInt64(value));
-				break;
-			case OracleDbType.Single:
 			case OracleDbType.BinaryFloat:
 				response.WriteFloat(Convert.ToSingle(value));
 				break;
-			case OracleDbType.Double:
+			
 			case OracleDbType.BinaryDouble:
 				response.WriteDouble(Convert.ToDouble(value));
 				break;
-			case OracleDbType.Decimal:
-				response.WriteDecimal(Convert.ToDecimal(value));
-				break;
+
 			case OracleDbType.Boolean:
 				response.WriteBoolean(Convert.ToBoolean(value));
 				break;
