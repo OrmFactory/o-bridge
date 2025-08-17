@@ -159,5 +159,6 @@ $RECYCLE.BIN/
 
 #Documentation
 */.obsidian/*
+.obsidian/*
 Documentation/Images/*
 /vector/*.cdr
