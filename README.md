@@ -51,7 +51,7 @@ If you don't want to install .NET Core runtimes, just build with --self-containe
 
 For hosts without .NET:
 ```bash
-dotnet publish -c Release -r linux-x64 --self-contained true -o ./publish
+dotnet publish -c Release -r linux-x64 --self-contained -o ./publish
 scp -r publish/ user@oracle-linux:/opt/obridge
 ```
 
