@@ -1,4 +1,4 @@
-# `o-Connector`: Type Serialization Format
+# Type Serialization Format
 
 This document describes **binary serialization rules** for all supported value types in the o-Connector protocol. It is intended for both client and server implementations that serialize/deserialize tabular data and parameters.
 ## Assumptions

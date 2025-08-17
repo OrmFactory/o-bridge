@@ -41,12 +41,12 @@ public class Column
 		response.WriteString(column.ColumnName);
 		response.WriteString(dataTypeName);
 
-		if (IsFieldPresent(0)) response.WriteByte(column.AllowDBNull!.Value ? (byte)1 : (byte)0);
+		if (IsFieldPresent(0)) response.WriteBoolean(column.AllowDBNull ?? false);
 		if (IsFieldPresent(1)) response.Write7BitEncodedInt(column.ColumnSize!.Value);
 		if (IsFieldPresent(2)) response.WriteByte((byte)column.NumericPrecision!.Value);
 		if (IsFieldPresent(3)) response.WriteByte((sbyte)column.NumericScale!.Value);
-		if (IsFieldPresent(4)) response.WriteByte(column.IsAliased!.Value ? (byte)1 : (byte)0);
-		if (IsFieldPresent(5)) response.WriteByte(column.IsExpression!.Value ? (byte)1 : (byte)0);
+		if (IsFieldPresent(4)) response.WriteBoolean(column.IsAliased ?? false);
+		if (IsFieldPresent(5)) response.WriteBoolean(column.IsExpression ?? false);
 		if (IsFieldPresent(6)) response.WriteString(column.BaseColumnName ?? "");
 		if (IsFieldPresent(7)) response.WriteString(column.BaseTableName ?? "");
 	}

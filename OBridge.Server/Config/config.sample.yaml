@@ -1,7 +1,7 @@
 # Enable full proxy mode (default: true)
 EnableFullProxy: true
 
-# Enable gzip compression for traffic (default: true)
+# Enable zstd compression for traffic (default: true)
 EnableCompression: true
 
 # Port for non-SSL connections (default: 3855 / 0x0F0F)
@@ -10,7 +10,7 @@ PlainListenerPort: 3855
 # Port for SSL connections (default: 4012 / 0x0FAC)
 SslListenerPort: 4012
 
-# Path to SSL certificate file in PEM format (default: null)
+# Path to SSL certificate file in PFX format (default: null)
 CertificatePath: null
 
 # List of Oracle servers the bridge can connect to
@@ -18,7 +18,7 @@ Servers:
   - ServerName: "srv1"
     OracleHost: "127.0.0.1"
     # Optional
-    OraclePort: 1521
+    #OraclePort: 1521
 
     # Use either SID or ServiceName, or both (default: null)
     OracleSID: "XE"
