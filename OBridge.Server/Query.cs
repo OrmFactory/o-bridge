@@ -180,7 +180,6 @@ public class Query
 
 			while (await reader.ReadAsync(stopQueryToken).ConfigureAwait(false))
 			{
-				rowsResponse.WriteByte((byte)ResponseTypeEnum.RowData);
 				byte bitMask = 1;
 				byte presenceMaskByte = 0;
 				foreach (var nullableColumn in nullableColumns)
@@ -207,17 +206,22 @@ public class Query
 
 				if (rowsResponse.WrittenBytesCount >= SendThreshold)
 				{
+					var rowBatch = new Response(ResponseTypeEnum.RowDataBatch);
+					rowBatch.WriteInt32(rowsResponse.WrittenBytesCount);
+					await rowBatch.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 					await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 					rowsResponse.Reset();
 				}
 			}
 
-			if (rowsResponse.WrittenBytesCount >= 0)
+			if (rowsResponse.WrittenBytesCount > 0)
 			{
+				var rowBatch = new Response(ResponseTypeEnum.RowDataBatch);
+				rowBatch.WriteInt32(rowsResponse.WrittenBytesCount);
+				await rowBatch.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 				await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 			}
 
-			await reader.CloseAsync().ConfigureAwait(false);
 			var endOfStream = new Response(ResponseTypeEnum.EndOfRowStream);
 			endOfStream.Write7BitEncodedInt(reader.RecordsAffected);
 			WriteOutputParameters(endOfStream);
