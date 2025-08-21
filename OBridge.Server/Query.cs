@@ -11,6 +11,8 @@ namespace OBridge.Server;
 
 public class Query
 {
+	private const int SendThreshold = 64 * 1024;
+
 	private readonly OracleConnection connection;
 	private readonly Stream stream;
 	private readonly CancellationToken token;
@@ -157,8 +159,8 @@ public class Query
 				cmd.Parameters.Add(parameter);
 			}
 
-			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken);
-			var schema = await reader.GetColumnSchemaAsync(stopQueryToken);
+			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken).ConfigureAwait(false);
+			var schema = await reader.GetColumnSchemaAsync(stopQueryToken).ConfigureAwait(false);
 			var columnCount = schema.Count;
 			var columnsHeader = new Response(ResponseTypeEnum.TableHeader);
 			columnsHeader.Write7BitEncodedInt(columnCount);
@@ -170,13 +172,15 @@ public class Query
 				column.WriteHeader(columnsHeader);
 				columns.Add(column);
 			}
-			await columnsHeader.SendAsync(stream, stopQueryToken);
+			await columnsHeader.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 
 			var nullableColumns = columns.Where(c => c.IsNullable).ToList();
 
-			while (await reader.ReadAsync(stopQueryToken))
+			var rowsResponse = new Response();
+
+			while (await reader.ReadAsync(stopQueryToken).ConfigureAwait(false))
 			{
-				var row = new Response(ResponseTypeEnum.RowData);
+				rowsResponse.WriteByte((byte)ResponseTypeEnum.RowData);
 				byte bitMask = 1;
 				byte presenceMaskByte = 0;
 				foreach (var nullableColumn in nullableColumns)
@@ -185,38 +189,47 @@ public class Query
 					if (bitMask == 128)
 					{
 						bitMask = 1;
-						row.WriteByte(presenceMaskByte);
+						rowsResponse.WriteByte(presenceMaskByte);
 						presenceMaskByte = 0;
 					}
 					else bitMask *= 2;
 				}
-				if (bitMask != 1) row.WriteByte(presenceMaskByte);
+				if (bitMask != 1) rowsResponse.WriteByte(presenceMaskByte);
 				foreach (var column in columns)
 				{
 					if (!reader.IsDBNull(column.Ordinal))
 					{
 						var val = column.ValueObject;
 						val.LoadFromReader(reader, column.Ordinal);
-						val.Serialize(row);
+						val.Serialize(rowsResponse);
 					}
 				}
 
-				await row.SendAsync(stream, stopQueryToken);
+				if (rowsResponse.WrittenBytesCount >= SendThreshold)
+				{
+					await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+					rowsResponse.Reset();
+				}
 			}
 
-			await reader.CloseAsync();
+			if (rowsResponse.WrittenBytesCount >= 0)
+			{
+				await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+			}
+
+			await reader.CloseAsync().ConfigureAwait(false);
 			var endOfStream = new Response(ResponseTypeEnum.EndOfRowStream);
 			endOfStream.Write7BitEncodedInt(reader.RecordsAffected);
 			WriteOutputParameters(endOfStream);
-			await endOfStream.SendAsync(stream, stopQueryToken);
-			await stream.FlushAsync(stopQueryToken);
+			await endOfStream.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+			await stream.FlushAsync(stopQueryToken).ConfigureAwait(false);
 		}
 		catch (OracleException ex)
 		{
 			var error = new Response(ResponseTypeEnum.OracleQueryError);
 			error.WriteString(ex.Message);
-			await error.SendAsync(stream, token);
-			await stream.FlushAsync(token);
+			await error.SendAsync(stream, token).ConfigureAwait(false);
+			await stream.FlushAsync(token).ConfigureAwait(false);
 		}
 		finally
 		{

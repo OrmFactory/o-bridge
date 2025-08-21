@@ -14,14 +14,14 @@ public class NumberValue : IValueObject
 	public void Serialize(Response row)
 	{
 		// Format A: single-byte unsigned integer
-		if (int.TryParse(number, out var intVal) && intVal >= 0 && intVal <= 127)
+		if (number.Length < 4 && int.TryParse(number, out var intVal) && intVal >= 0 && intVal <= 127)
 		{
 			row.WriteByte((byte)(0x80 | intVal));
 			return;
 		}
 
 		var value = number;
-		var negative = value.StartsWith("-");
+		var negative = value.Length > 0 && value[0] == '-';
 		if (negative) value = value.Substring(1);
 
 		int scale = 0;
