@@ -38,7 +38,7 @@ See the corresponding docs in the repository for full details.
 How to test:
 ```bash
 git clone https://github.com/OrmFactory/o-bridge.git
-cd o-bridge
+cd o-bridge/OBridge.Server
 dotnet run
 ```
 
