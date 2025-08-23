@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Buffers.Binary;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace OBridge.Server;
@@ -24,6 +25,22 @@ public class Response
 		var span = buffer.GetSpan(1);
 		span[0] = value;
 		buffer.Advance(1);
+	}
+
+	private int lengthPrefixedBlockStart = -1;
+
+	public void BeginLengthPrefixedBlock()
+	{
+		lengthPrefixedBlockStart = WrittenBytesCount;
+		buffer.GetSpan(4);
+		buffer.Advance(4);
+	}
+
+	public void EndLengthPrefixedBlock()
+	{
+		MemoryMarshal.TryGetArray(buffer.WrittenMemory, out var segment);
+		int blockLength = buffer.WrittenCount - (lengthPrefixedBlockStart + 4);
+		BinaryPrimitives.WriteInt32LittleEndian(segment.AsSpan(lengthPrefixedBlockStart, 4), blockLength);
 	}
 
 	public void WriteBoolean(bool value)
@@ -149,4 +166,5 @@ public enum ResponseTypeEnum
 	EndOfRowStream = 0x03,
 	Error = 0x10,
 	OracleQueryError = 0x11,
+	FetchCancelledByClient = 0x12,
 }

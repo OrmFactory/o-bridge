@@ -11,7 +11,7 @@ namespace OBridge.Server;
 
 public class Query
 {
-	private const int SendThreshold = 64 * 1024;
+	private const int SendThreshold = 16 * 1024;
 
 	private readonly OracleConnection connection;
 	private readonly Stream stream;
@@ -152,6 +152,7 @@ public class Query
 			cmd.CommandType = CommandType.Text;
 			//
 			cmd.InitialLONGFetchSize = -1;
+			cmd.FetchSize = 1024 * 1024;
 			cmd.BindByName = true;
 
 			foreach (var parameter in parameters)
@@ -162,24 +163,29 @@ public class Query
 			await using var reader = await cmd.ExecuteReaderAsync(commandBehavior, stopQueryToken).ConfigureAwait(false);
 			var schema = await reader.GetColumnSchemaAsync(stopQueryToken).ConfigureAwait(false);
 			var columnCount = schema.Count;
-			var columnsHeader = new Response(ResponseTypeEnum.TableHeader);
-			columnsHeader.Write7BitEncodedInt(columnCount);
+			var response = new Response(ResponseTypeEnum.TableHeader);
+			response.Write7BitEncodedInt(columnCount);
 
 			var columns = new List<Column>();
 			for (int i = 0; i < columnCount; i++)
 			{
 				var column = new Column(schema[i]);
-				column.WriteHeader(columnsHeader);
+				column.WriteHeader(response);
 				columns.Add(column);
 			}
-			await columnsHeader.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 
 			var nullableColumns = columns.Where(c => c.IsNullable).ToList();
 
-			var rowsResponse = new Response();
+			bool linesWritten = false;
 
 			while (await reader.ReadAsync(stopQueryToken).ConfigureAwait(false))
 			{
+				if (!linesWritten)
+				{
+					response.WriteByte((byte)ResponseTypeEnum.RowDataBatch);
+					response.BeginLengthPrefixedBlock();
+				}
+
 				byte bitMask = 1;
 				byte presenceMaskByte = 0;
 				foreach (var nullableColumn in nullableColumns)
@@ -188,45 +194,49 @@ public class Query
 					if (bitMask == 128)
 					{
 						bitMask = 1;
-						rowsResponse.WriteByte(presenceMaskByte);
+						response.WriteByte(presenceMaskByte);
 						presenceMaskByte = 0;
 					}
 					else bitMask *= 2;
 				}
-				if (bitMask != 1) rowsResponse.WriteByte(presenceMaskByte);
+				if (bitMask != 1) response.WriteByte(presenceMaskByte);
 				foreach (var column in columns)
 				{
 					if (!reader.IsDBNull(column.Ordinal))
 					{
 						var val = column.ValueObject;
 						val.LoadFromReader(reader, column.Ordinal);
-						val.Serialize(rowsResponse);
+						val.Serialize(response);
 					}
 				}
 
-				if (rowsResponse.WrittenBytesCount >= SendThreshold)
+				linesWritten = true;
+				if (response.WrittenBytesCount >= SendThreshold)
 				{
-					var rowBatch = new Response(ResponseTypeEnum.RowDataBatch);
-					rowBatch.WriteInt32(rowsResponse.WrittenBytesCount);
-					await rowBatch.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
-					await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
-					rowsResponse.Reset();
+					response.EndLengthPrefixedBlock();
+					await response.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+					response.Reset();
+					linesWritten = false;
 				}
 			}
 
-			if (rowsResponse.WrittenBytesCount > 0)
+			if (linesWritten)
 			{
-				var rowBatch = new Response(ResponseTypeEnum.RowDataBatch);
-				rowBatch.WriteInt32(rowsResponse.WrittenBytesCount);
-				await rowBatch.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
-				await rowsResponse.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+				response.EndLengthPrefixedBlock();
 			}
 
-			var endOfStream = new Response(ResponseTypeEnum.EndOfRowStream);
-			endOfStream.Write7BitEncodedInt(reader.RecordsAffected);
-			WriteOutputParameters(endOfStream);
-			await endOfStream.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
+			response.WriteByte((byte)ResponseTypeEnum.EndOfRowStream);
+			response.Write7BitEncodedInt(reader.RecordsAffected);
+			WriteOutputParameters(response);
+			await response.SendAsync(stream, stopQueryToken).ConfigureAwait(false);
 			await stream.FlushAsync(stopQueryToken).ConfigureAwait(false);
+		}
+		catch (OracleException ex) when (ex.Number == 1013)
+		{
+			var error = new Response(ResponseTypeEnum.FetchCancelledByClient);
+			error.WriteString(ex.Message);
+			await error.SendAsync(stream, token).ConfigureAwait(false);
+			await stream.FlushAsync(token).ConfigureAwait(false);
 		}
 		catch (OracleException ex)
 		{

@@ -55,6 +55,7 @@ public class Worker : BackgroundService
 		while (!token.IsCancellationRequested)
 		{
 			var client = await listener.AcceptTcpClientAsync(token);
+			client.NoDelay = true;
 			Task.Run(() => HandlePlainClientAsync(client, token), token);
 		}
 	}
@@ -68,6 +69,7 @@ public class Worker : BackgroundService
 		while (!token.IsCancellationRequested)
 		{
 			var client = await listener.AcceptTcpClientAsync(token);
+			client.NoDelay = true;
 			Task.Run(() => HandleSslClientAsync(client, token), token);
 		}
 		listener.Stop();
