@@ -69,6 +69,7 @@ public class DateTimeValue : IValueObject
 		var hasFraction = secondsPrecision > 0 && nanosecond != 0;
 		var hasTimezone = dateTimeFormat == DateTimeFormatEnum.TimestampWithTimeZone && timeZoneOffsetMinutes != 0;
 		var isDateOnly = hour == 0 && minute == 0 && second == 0 && !hasTimezone && !hasFraction;
+		var fullYearFormat = year < 1900 || year > 2155;
 
 		var writer = new BitWriter();
 
@@ -76,11 +77,19 @@ public class DateTimeValue : IValueObject
 		writer.AddBit(isDateOnly);
 		writer.AddBit(hasFraction);
 		writer.AddBit(hasTimezone);
+		writer.AddBit(fullYearFormat);
 
 		// --- Date ---
-		int absYear = Math.Abs(year);
-		writer.AddBit(year < 0);
-		writer.AddBits(absYear, 14);
+		if (fullYearFormat)
+		{
+			int absYear = Math.Abs(year);
+			writer.AddBit(year < 0);
+			writer.AddBits(absYear, 14);
+		}
+		else
+		{
+			writer.AddBits(year - 1900, 8);
+		}
 		writer.AddBits(month, 4);
 		writer.AddBits(day, 5);
 

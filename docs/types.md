@@ -75,21 +75,21 @@ Binary serialization based on Oracle's flexible precision decimal format.
 
 ## Timestamp
 
-| Field               | Bits | Range                  | Notes                                                       |
-| ------------------- | ---- | ---------------------- | ----------------------------------------------------------- |
-| `DateOnly`          | 1    | 0/1                    | If 1 → only date is stored, no fraction, no timezone offset |
-| `HasFraction`       | 1    | 0/1                    | If 1 → fractional seconds included                          |
-| `HasTimezoneOffset` | 1    | 0/1                    | If 1 → 2 extra bytes (UTC offset in minutes)                |
-| `YearSign`          | 1    | 0=positive, 1=negative | Sign bit                                                    |
-| `Year`              | 14   | 0 to 9999              | 14 bit integer                                              |
-| `Month`             | 4    | 1–12                   |                                                             |
-| `Day`               | 5    | 1–31                   |                                                             |
-| `Hour`              | 5    | 0–23                   |                                                             |
-| `Minute`            | 6    | 0–59                   |                                                             |
-| `Second`            | 6    | 0–59                   |                                                             |
-| `Fraction`          | 0–30 | 0–999_999_999          | depending on precision (up to 9 digits), if `HasFraction=1` |
-| `TimezoneSign`      | 1    | 0=positive, 1=negative |                                                             |
-| `Timezone offset`   | 10   | 0–840                  | Offset in minutes from UTC, absolute value                  |
+| Field               | Bits      | Range                      | Notes                                                       |
+| ------------------- | --------- | -------------------------- | ----------------------------------------------------------- |
+| `DateOnly`          | 1         | 0/1                        | If 1 → only date is stored, no fraction, no timezone offset |
+| `HasFraction`       | 1         | 0/1                        | If 1 → fractional seconds included                          |
+| `HasTimezoneOffset` | 1         | 0/1                        | If 1 → 2 extra bytes (UTC offset in minutes)                |
+| `FullYearFormat`    | 1         | 0/1                        | if 1 year will be in 15bit format, if 0 - 8 bit             |
+| `Year`              | 1+14 or 8 | -9999 to 9999 or 1900-2155 | 1 bit sign + 14 bit integer or 8 bit offset 1900            |
+| `Month`             | 4         | 1–12                       |                                                             |
+| `Day`               | 5         | 1–31                       |                                                             |
+| `Hour`              | 5         | 0–23                       |                                                             |
+| `Minute`            | 6         | 0–59                       |                                                             |
+| `Second`            | 6         | 0–59                       |                                                             |
+| `Fraction`          | 0–30      | 0–999_999_999              | depending on precision (up to 9 digits), if `HasFraction=1` |
+| `TimezoneSign`      | 1         | 0=positive, 1=negative     |                                                             |
+| `Timezone offset`   | 10        | 0–840                      | Offset in minutes from UTC, absolute value                  |
 ### Fraction part
 
 | Precision (digits) | Bit Count | Max Value   |
