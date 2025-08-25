@@ -91,6 +91,10 @@ public class Worker : BackgroundService
 		{
 			logger.LogDebug("Client closed session");
 		}
+		catch (IOException)
+		{
+			logger.LogDebug("Client closed session (IO error on disconnect)");
+		}
 		catch (Exception e)
 		{
 			logger.LogError(e, e.Message);
@@ -118,6 +122,10 @@ public class Worker : BackgroundService
 		catch (EndOfStreamException)
 		{
 			logger.LogDebug("Client closed session");
+		}
+		catch (IOException)
+		{
+			logger.LogDebug("Client closed session (IO error on disconnect)");
 		}
 		catch (Exception e)
 		{
