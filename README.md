@@ -1,6 +1,18 @@
 # O-Bridge
 
-O-Bridge is an open-source proxy and binary protocol enabling [OrmFactory](https://ormfactory.com/) to interact with Oracle databases without violating Oracle licensing - no official connector is bundled. It facilitates ORM use by decoupling the proprietary Oracle driver.
+## Why?
+
+When developing [OrmFactory](https://ormfactory.com), we faced a major roadblock: **Oracle's proprietary license strictly prohibits embedding their official drivers into commercial or third-party developer tools.** 
+
+We refused to compromise on user experience or expose our enterprise clients to compliance risks. Since we couldn't ship Oracle's closed-source binaries, we decided to build our own independent, clean-room alternative:
+1. An open-source, high-performance gateway [O-Bridge Server](https://github.com/OrmFactory/o-bridge) that sits next to the database under the permissive MIT license.
+2. A lightweight managed client (**O-Connector**) that talks to the gateway via a highly optimized binary stream.
+
+**The result?** A 100% legally clean, lightning-fast, and container-friendly communication layer. We use it to power OrmFactory, but we made the entire connectivity stack free and open-source forever under the MIT license, so you can safely use, embed, or modify it in your own projects without asking Oracle for permission.
+
+It is designed specifically for use with [OrmFactory](https://ormfactory.com) - a modern developer tool for model-first approach and ORM code generation.
+O-Connector enables OrmFactory to connect to Oracle in a fast and resource-efficient way, without relying on heavyweight native drivers.
+
 ## Features
 
 - Eliminates Oracle round-trip latency via streaming FETCH.
@@ -8,7 +20,10 @@ O-Bridge is an open-source proxy and binary protocol enabling [OrmFactory](https
 - Very compact binary protocol - lower bandwidth than native Oracle.
 - Optional compression (zstd) and optional encryption.
 - Designed to run close to the database, e.g., on the same host (Oracle Linux).
+
 ## Architecture
+
+O-Bridge fetches the official open-source Oracle Managed Driver via NuGet during your local compilation. This ensures 100% legal compliance because you build it yourself.
 
 Client ←→ O-Bridge ←→ Oracle
 
@@ -16,6 +31,7 @@ Client ←→ O-Bridge ←→ Oracle
 - Connects to Oracle using its native protocol and exposes a custom open protocol to clients.
 - Simple startup: `git clone` + `dotnet run`.
 - [ADO.NET connector](https://github.com/OrmFactory/o-connector-net) is published in a separate repo.
+
 ### Client Connections
 
 - O-Bridge listens on both plain and SSL ports.
@@ -24,6 +40,7 @@ Client ←→ O-Bridge ←→ Oracle
     2. **Defined users**: client logs in with own credentials, O-Bridge uses preset Oracle credentials — facilitates credential sharing without exposing the Oracle password.
 
 - See the [ADO.NET connector repo](https://github.com/OrmFactory/o-connector-net) for connection string details.
+
 ### Protocol
 
 Custom asynchronous binary protocol over TCP. Detailed specifications are in:
@@ -33,6 +50,7 @@ Custom asynchronous binary protocol over TCP. Detailed specifications are in:
 - [Data Types](docs/types.md)
 
 See the corresponding docs in the repository for full details.
+
 ## Installation & Running
 
 How to test:
@@ -47,53 +65,61 @@ dotnet run
 - Starts with default settings.
 
 If you don't want to install .NET Core runtimes, just build with --self-contained and copy into destination machine.
+
 ### Building Self-Contained Binaries
 
-For hosts without .NET:
+If you do not want to install the .NET SDK on your production database host, compile a standalone, self-contained single binary on your build machine:
+
 ```bash
-dotnet publish -c Release -r linux-x64 --self-contained -o ./publish
-scp -r publish/ user@oracle-linux:/opt/obridge
+# 1. Navigate to the project directory
+cd o-bridge/OBridge.Server
+
+# 2. Compile for target architecture (outputs to OBridge.Server/publish)
+dotnet publish OBridge.Server.csproj -c Release -r linux-x64 --self-contained true -o ./publish
+
+# 3. Transfer the compiled assets to your production host
+scp -r ./publish user@oracle-linux-host:/opt/obridge-server
+```
+*(Adjust the Runtime Identifier like `linux-arm64` or `win-x64` based on your production host architecture).*
+
+### Deploy & Service Setup (Oracle Linux 8/9, RHEL 8/9, Rocky Linux)
+
+Execute these commands on your target production server to create a dedicated system user and set correct permissions:
+
+```bash
+sudo useradd -r -s /bin/false obridge
+sudo mkdir -p /opt/obridge-server
+sudo chown -R obridge:obridge /opt/obridge-server
 ```
 
-Adjust runtime identifiers (e.g. `linux-arm64`, `win-x64`) as needed. Refer to the .NET runtime identifiers catalog.
-### Deploy
+#### Creating Systemd Service
 
-**Systemd service (Oracle Linux)**:
-```bash
-# /etc/systemd/system/obridge.service
+Create the unit configuration file at `/etc/systemd/system/obridge.service`:
+
+```ini
 [Unit]
-Description=O-Bridge Server
+Description=O-Bridge Server Gateway
 After=network.target
 
 [Service]
 Type=simple
 User=obridge
-WorkingDirectory=/opt/obridge/publish
-ExecStart=/opt/obridge/publish/o-bridge
+WorkingDirectory=/opt/obridge-server
+ExecStart=/opt/obridge-server/OBridge.Server
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-deploy example:
-```bash
-git clone https://github.com/OrmFactory/o-bridge.git /opt/obridge
-cd /opt/obridge
+Start and enable the service:
 
-#build
-dotnet publish -c Release -o /opt/obridge/publish
-
-#add user
-sudo useradd -r -s /bin/false obridge
-```
-
-Start service:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable obridge
 sudo systemctl start obridge
 ```
+
 ## Configuration
 
 On first run, O-Bridge creates `config/` and `certs/`:
@@ -143,7 +169,7 @@ Servers:
 
 - Add support for prepared statements
 - Transactions
-- `NextResult` (multiple result sets)  
+- `NextResult` (multiple result sets)
 
 [Contributions](CONTRIBUTING.md) welcome.
 
