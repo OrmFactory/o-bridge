@@ -120,6 +120,71 @@ sudo systemctl enable obridge
 sudo systemctl start obridge
 ```
 
+## Running via Docker (Build from Source)
+
+If you prefer containerized deployments over systemd, you can easily build and run O-Bridge inside Docker. To maintain 100% licensing compliance, you must build the image locally from source so that dependencies are safely resolved within your own infrastructure environment.
+
+### 1. Create a `Dockerfile`
+
+Create a file named `Dockerfile` in the root of the repository with the following multi-stage specification:
+
+```dockerfile
+# Stage 1: Build the application and fetch official Oracle dependencies from NuGet
+FROM ://microsoft.com AS build
+WORKDIR /src
+
+# Copy source code
+COPY . .
+WORKDIR /src/OBridge.Server
+
+# Compile a self-contained production-ready binary
+RUN dotnet publish OBridge.Server.csproj -c Release -r linux-x64 --self-contained true -o /app/publish
+
+# Stage 2: Create a minimal, secure runtime image
+FROM ://microsoft.com AS final
+WORKDIR /app
+
+# Ensure console logs are flushed instantly and preserve colors
+ENV DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION=1
+ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+# Run as a non-root system user for security
+USER \$APP_UID
+
+# Copy compiled assets and expose default O-Bridge ports
+COPY --from=build /app/publish .
+EXPOSE 3855 4012
+
+ENTRYPOINT ["./OBridge.Server"]
+```
+
+### 2. Build and Run the Container
+
+Execute these commands in the directory containing the `Dockerfile`:
+
+```bash
+# Build the image locally
+docker build -t o-bridge-server .
+
+# Run the container with persistent volumes for config and certs
+docker run -d \
+  --name o-bridge \
+  -p 3855:3855 \
+  -p 4012:4012 \
+  -v \$(pwd)/config:/app/config \
+  -v \$(pwd)/certs:/app/certs \
+  --restart unless-stopped \
+  o-bridge-server
+```
+
+### 3. Viewing Logs
+
+Since O-Bridge streams structured single-line text directly to the standard console output, you can inspect the server logs in real-time using native Docker tools:
+
+```bash
+docker logs -f o-bridge
+```
+
 ## Configuration
 
 On first run, O-Bridge creates `config/` and `certs/`:
